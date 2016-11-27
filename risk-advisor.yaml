@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: risk-advisor
+spec:
+  containers:
+  - name: risk-advisor
+    image: pposkrobko/risk-advisor
+    ports:
+    - containerPort: 11111 

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/Prytu/risk-advisor/podprovider"
+	"github.com/Prytu/risk-advisor/proxy/mocks"
 	"io/ioutil"
 	"k8s.io/kubernetes/pkg/api"
 	"log"
@@ -12,17 +13,16 @@ import (
 	"net/url"
 	"strings"
 	"time"
-	"github.com/Prytu/risk-advisor/proxy/mocks"
 )
 
 type Proxy struct {
 	MasterURL       *url.URL
 	ReverseProxy    *httputil.ReverseProxy
 	PodProvider     podprovider.UnscheduledPodProvider
-	ResponseChannel chan api.Binding
+	ResponseChannel chan<- api.Binding
 }
 
-func New(serverURL string, podProvider podprovider.UnscheduledPodProvider, responseChannel chan api.Binding) (*Proxy, error) {
+func New(serverURL string, podProvider podprovider.UnscheduledPodProvider, responseChannel chan<- api.Binding) (*Proxy, error) {
 	masterURL, err := url.Parse(serverURL)
 	if err != nil {
 		return nil, err
@@ -37,14 +37,8 @@ func New(serverURL string, podProvider podprovider.UnscheduledPodProvider, respo
 }
 
 func (proxy *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if strings.Contains(r.URL.String(), "api/v1/namespaces/default/pods/nginx-without-nodename") {
-		log.Printf("NGINX WITHOUT NODENAME: URL: %v, %v", r.URL, r.Method)
-
-		proxy.ReverseProxy.ServeHTTP(w, r)
-		return
-	}
-
 	if r.Method == "POST" {
+		log.Printf("POST REQUEST URL: %v, %v", r.URL, r.Method)
 		if strings.Contains(r.URL.String(), "bindings") {
 			var binding api.Binding
 
@@ -72,50 +66,76 @@ func (proxy *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if strings.Contains(r.URL.String(), "api/v1/watch/pods") {
-		pod, err := proxy.PodProvider.GetPod()
-		if err != nil {
-			time.Sleep(5 * time.Second)
-			w.Write([]byte(""))
-			return
-		}
-		log.Print("GOT POD, WATCH")
-
-		podEvent := PodEventFromPod(pod)
-
-		eventPodJSON, err := json.MarshalIndent(podEvent, "", "    ")
-		if err != nil {
-			panic("error marshalling pod event")
-			errorMessage := fmt.Sprintf("Error marshalling response: %v\n", err)
-			http.Error(w, errorMessage, http.StatusInternalServerError)
-		}
-		eventPodJSON = append(eventPodJSON, []byte("\r\n")...)
-
-		log.Print(string(eventPodJSON))
-
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(eventPodJSON)
-
+		//pod, err := proxy.PodProvider.GetPod()
+		//if err != nil {
 		time.Sleep(5 * time.Second)
+		w.Write([]byte(""))
+		return
+		//}
+		/*
+			podEvent := PodEventFromPod(&pod)
+
+			flusher, ok := w.(http.Flusher)
+			if !ok {
+				panic("writer is not a flusher")
+			}
+
+			eventPodJSON, err := json.MarshalIndent(podEvent, "", "    ")
+			if err != nil {
+				panic("Error marshalling pod event.")
+			}
+			eventPodJSON = append(eventPodJSON, []byte("\r\n")...)
+
+			log.Print(string(eventPodJSON))
+
+			w.Header().Set("Content-Type", "application/json")
+			w.Write(eventPodJSON)
+			flusher.Flush()*/
+
 		return
 	}
 
 	if strings.HasPrefix(r.URL.String(), "/api/v1/pods") {
 		if r.Method == "GET" {
+			values := r.URL.Query()
+
+			for k, v := range values {
+				//log.Printf("k = %v, v = %v", k, v)
+				if k == "fieldSelector" {
+					for _, selector := range v {
+						if strings.Contains(selector, "spec.nodeName!=") {
+							podList := EmptyPodList()
+
+							podJSON, err := json.Marshal(podList)
+							if err != nil {
+								panic(fmt.Sprintf("Error marshalling response: %v\n", err))
+							}
+
+							log.Printf("GET responding with: %s", string(podJSON))
+
+							w.Header().Set("Content-Type", "application/json")
+							w.Write(podJSON)
+							return
+						}
+					}
+				}
+			}
+
 			var podList *api.PodList
 
 			pod, err := proxy.PodProvider.GetPod()
 			if err != nil {
 				podList = EmptyPodList()
 			} else {
-				podList = PodListFromPod(pod)
-				log.Print("GOT POD, GET")
+				podList = PodListFromPod(&pod)
 			}
 
 			podJSON, err := json.Marshal(podList)
 			if err != nil {
-				errorMessage := fmt.Sprintf("Error marshalling response: %\n", err)
-				http.Error(w, errorMessage, http.StatusInternalServerError)
+				panic(fmt.Sprintf("Error marshalling response: %v\n", err))
 			}
+
+			log.Printf("GET responding with: %s", string(podJSON))
 
 			w.Header().Set("Content-Type", "application/json")
 			w.Write(podJSON)

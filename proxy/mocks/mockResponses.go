@@ -1,6 +1,5 @@
 package mocks
 
-
 const BindingResponse = "{ " +
 	"\"kind\": \"Status\"," +
 	"\"apiVersion\": \"v1\"," +

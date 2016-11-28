@@ -6,22 +6,22 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net/http"
-
 	"k8s.io/kubernetes/pkg/api"
+	"net/http"
 
 	"github.com/Prytu/risk-advisor/podprovider"
 )
 
 type RiskAdvisorHandler struct {
 	server               *http.ServeMux
-	ProxyResponseChannel chan api.Binding
+	ProxyResponseChannel <-chan api.Binding
 	PodProvider          podprovider.UnscheduledPodProvider
 }
 
-func New(proxyResponseChannel chan api.Binding, podProvider podprovider.UnscheduledPodProvider) *RiskAdvisorHandler {
+func New(proxyResponseChannel <-chan api.Binding, podProvider podprovider.UnscheduledPodProvider) *RiskAdvisorHandler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/advise", newAdviseHandler(proxyResponseChannel, podProvider))
+	adviseHandler := newAdviseHandler(proxyResponseChannel, podProvider)
+	mux.HandleFunc("/advise", adviseHandler)
 
 	return &RiskAdvisorHandler{
 		server:               mux,
@@ -34,17 +34,16 @@ func (handler *RiskAdvisorHandler) ServeHTTP(w http.ResponseWriter, r *http.Requ
 	handler.server.ServeHTTP(w, r)
 }
 
-func newAdviseHandler(responseChannel chan api.Binding, podProvider podprovider.UnscheduledPodProvider) func(responseWriter http.ResponseWriter, request *http.Request) {
+func newAdviseHandler(responseChannel <-chan api.Binding, podProvider podprovider.UnscheduledPodProvider) func(responseWriter http.ResponseWriter, request *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		pod, err := parseAdviseRequestBody(r.Body)
 		if err != nil {
-			errorMessage := fmt.Sprintf("Error marshalling response: %v\n", err)
-			http.Error(w, errorMessage, http.StatusBadRequest)
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
 		if err = podProvider.AddPod(pod); err != nil {
-			errorMessage := fmt.Sprintf("Error marshalling response: %v\n", err)
+			errorMessage := fmt.Sprintf("Error adding pod: %v\n", err)
 			http.Error(w, errorMessage, http.StatusInternalServerError)
 			return
 		}
@@ -60,6 +59,7 @@ func newAdviseHandler(responseChannel chan api.Binding, podProvider podprovider.
 
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(json)
+		return
 	}
 }
 

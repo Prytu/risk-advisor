@@ -16,10 +16,10 @@ import (
 type RiskAdvisorHandler struct {
 	server               *http.ServeMux
 	ProxyResponseChannel chan api.Binding
-	PodProvider          podprovider.PodProvider
+	PodProvider          podprovider.UnscheduledPodProvider
 }
 
-func New(proxyResponseChannel chan api.Binding, podProvider podprovider.PodProvider) *RiskAdvisorHandler {
+func New(proxyResponseChannel chan api.Binding, podProvider podprovider.UnscheduledPodProvider) *RiskAdvisorHandler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/advise", newAdviseHandler(proxyResponseChannel, podProvider))
 
@@ -34,7 +34,7 @@ func (handler *RiskAdvisorHandler) ServeHTTP(w http.ResponseWriter, r *http.Requ
 	handler.server.ServeHTTP(w, r)
 }
 
-func newAdviseHandler(responseChannel chan api.Binding, podProvider podprovider.PodProvider) func(responseWriter http.ResponseWriter, request *http.Request) {
+func newAdviseHandler(responseChannel chan api.Binding, podProvider podprovider.UnscheduledPodProvider) func(responseWriter http.ResponseWriter, request *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		pod, err := parseAdviseRequestBody(r.Body)
 		if err != nil {

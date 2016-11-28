@@ -3,6 +3,7 @@ package proxy
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/Prytu/risk-advisor/podprovider"
 	"io/ioutil"
 	"k8s.io/kubernetes/pkg/api"
 	"log"
@@ -11,16 +12,17 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"github.com/Prytu/risk-advisor/proxy/mocks"
 )
 
 type Proxy struct {
 	MasterURL       *url.URL
 	ReverseProxy    *httputil.ReverseProxy
-	podProvider     UnscheduledPodProvider
+	PodProvider     podprovider.UnscheduledPodProvider
 	ResponseChannel chan api.Binding
 }
 
-func New(serverURL string, podProvider UnscheduledPodProvider, responseChannel chan api.Binding) (*Proxy, error) {
+func New(serverURL string, podProvider podprovider.UnscheduledPodProvider, responseChannel chan api.Binding) (*Proxy, error) {
 	masterURL, err := url.Parse(serverURL)
 	if err != nil {
 		return nil, err
@@ -29,48 +31,12 @@ func New(serverURL string, podProvider UnscheduledPodProvider, responseChannel c
 	return &Proxy{
 		MasterURL:       masterURL,
 		ReverseProxy:    httputil.NewSingleHostReverseProxy(masterURL),
-		podProvider:     podProvider,
+		PodProvider:     podProvider,
 		ResponseChannel: responseChannel,
 	}, nil
 }
 
-const bindingResponse = "{ " +
-	"\"kind\": \"Status\"," +
-	"\"apiVersion\": \"v1\"," +
-	"\"metadata\": {}," +
-	"\"status\": \"Success\"," +
-	"\"code\": 201}"
-
-// this response should be based on scheduler request and it should just add
-// selfLink, uid, resourceVersion and creatioTimestamp fields
-const eventResponse = "{" +
-	"\"kind\": \"Event\"," +
-	"\"apiVersion\": \"v1\"," +
-	"\"metadata\": {" +
-	"\"name\": \"nginx-without-nodename.148a9fcaa3a27080\"," +
-	"\"namespace\": \"default\"," +
-	"\"selfLink\": \"/api/v1/namespaces/default/events/nginx-without-nodename.148a9fcaa3a27080\"," +
-	"\"uid\": \"851920f3-b3e6-11e6-9514-000c2999b232\"," +
-	"\"resourceVersion\": \"114\"," +
-	"\"creationTimestamp\": \"2016-11-26T14:42:13Z\"}," +
-	"\"involvedObject\": {\"kind\": \"Pod\"," +
-	"\"namespace\": \"default\"," +
-	"\"name\": \"nginx-without-nodename\"," +
-	"\"uid\": \"b0220242-b346-11e6-a633-000c2999b232\"," +
-	"\"apiVersion\": \"v1\"," +
-	"\"resourceVersion\": \"614\"}," +
-	"\"reason\": \"Scheduled\"," +
-	"\"message\": \"Successfully assigned nginx-without-nodename to ubuntu\"," +
-	"\"source\": {" +
-	"\"component\": \"default-scheduler\"}," +
-	"\"firstTimestamp\": \"2016-11-26T14:38:40Z\"," +
-	"\"lastTimestamp\": \"2016-11-26T14:38:40Z\"," +
-	"\"count\": 1," +
-	"\"type\": \"Normal\"}"
-
 func (proxy *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log.Printf("URL: %v, %v", r.URL, r.Method)
-
 	if strings.Contains(r.URL.String(), "api/v1/namespaces/default/pods/nginx-without-nodename") {
 		log.Printf("NGINX WITHOUT NODENAME: URL: %v, %v", r.URL, r.Method)
 
@@ -79,11 +45,6 @@ func (proxy *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == "POST" {
-		log.Printf("PUT content-type: %s, accept: %v\n", r.Header["Content-Type"], r.Header["Accept"])
-
-		//body, _ := ioutil.ReadAll(r.Body)
-		//log.Printf("BODY: %s\n", string(body))
-
 		if strings.Contains(r.URL.String(), "bindings") {
 			var binding api.Binding
 
@@ -100,24 +61,31 @@ func (proxy *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			proxy.ResponseChannel <- binding
 
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(bindingResponse))
+			w.Write([]byte(mocks.BindingResponse))
 		} else if strings.Contains(r.URL.String(), "events") {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusConflict)
-			w.Write([]byte(eventResponse))
+			w.Write([]byte(mocks.EventResponse))
 		}
 
 		return
 	}
 
 	if strings.Contains(r.URL.String(), "api/v1/watch/pods") {
-		pod := proxy.podProvider.ProvidePod()
+		pod, err := proxy.PodProvider.GetPod()
+		if err != nil {
+			time.Sleep(5 * time.Second)
+			w.Write([]byte(""))
+			return
+		}
+		log.Print("GOT POD, WATCH")
+
 		podEvent := PodEventFromPod(pod)
 
 		eventPodJSON, err := json.MarshalIndent(podEvent, "", "    ")
 		if err != nil {
 			panic("error marshalling pod event")
-			errorMessage := fmt.Sprintf("Error marshalling response: %\n", err)
+			errorMessage := fmt.Sprintf("Error marshalling response: %v\n", err)
 			http.Error(w, errorMessage, http.StatusInternalServerError)
 		}
 		eventPodJSON = append(eventPodJSON, []byte("\r\n")...)
@@ -133,7 +101,15 @@ func (proxy *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if strings.HasPrefix(r.URL.String(), "/api/v1/pods") {
 		if r.Method == "GET" {
-			podList := proxy.podProvider.ProvidePodList()
+			var podList *api.PodList
+
+			pod, err := proxy.PodProvider.GetPod()
+			if err != nil {
+				podList = EmptyPodList()
+			} else {
+				podList = PodListFromPod(pod)
+				log.Print("GOT POD, GET")
+			}
 
 			podJSON, err := json.Marshal(podList)
 			if err != nil {

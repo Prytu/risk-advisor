@@ -18,7 +18,7 @@ func main() {
 	// TODO: add error channel to both servers
 	raHandler := riskadvisorhandler.New(responseChannel, podProvider)
 
-	apiserverProxy, err := proxy.New(realApiserverURL, &proxy.FakePodProvider{}, responseChannel)
+	apiserverProxy, err := proxy.New(realApiserverURL, podProvider, responseChannel)
 	if err != nil {
 		panic(err)
 	}

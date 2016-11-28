@@ -2,6 +2,7 @@ package proxy
 
 import "k8s.io/kubernetes/pkg/api"
 
+// TODO: Use models from kubernetes instead
 type PodEvent struct {
 	Type   string    `json:"type"`
 	Object *EventPod `json:"object"`

@@ -1,33 +1,36 @@
 package proxy
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"k8s.io/kubernetes/pkg/api"
 	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"strings"
+	"time"
 )
 
 type Proxy struct {
-	MasterURL    *url.URL
-	ReverseProxy *httputil.ReverseProxy
-	podProvider  UnscheduledPodProvider
+	MasterURL       *url.URL
+	ReverseProxy    *httputil.ReverseProxy
+	podProvider     UnscheduledPodProvider
+	ResponseChannel chan api.Binding
 }
 
-func New(serverURL string, podProvider UnscheduledPodProvider) (*Proxy, error) {
+func New(serverURL string, podProvider UnscheduledPodProvider, responseChannel chan api.Binding) (*Proxy, error) {
 	masterURL, err := url.Parse(serverURL)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Proxy{
-		MasterURL:    masterURL,
-		ReverseProxy: httputil.NewSingleHostReverseProxy(masterURL),
-		podProvider:  podProvider,
+		MasterURL:       masterURL,
+		ReverseProxy:    httputil.NewSingleHostReverseProxy(masterURL),
+		podProvider:     podProvider,
+		ResponseChannel: responseChannel,
 	}, nil
 }
 
@@ -68,39 +71,69 @@ const eventResponse = "{" +
 func (proxy *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log.Printf("URL: %v, %v", r.URL, r.Method)
 
-	if r.Method == "PUT" {
-		log.Printf("PUT content-type: %s, accept: %v\n", r.Header["Content-Type"], r.Header["Accept"])
-		buf, _ := ioutil.ReadAll(r.Body)
-		rdr1 := ioutil.NopCloser(bytes.NewBuffer(buf))
-		rdr2 := ioutil.NopCloser(bytes.NewBuffer(buf))
+	if strings.Contains(r.URL.String(), "api/v1/namespaces/default/pods/nginx-without-nodename") {
+		log.Printf("NGINX WITHOUT NODENAME: URL: %v, %v", r.URL, r.Method)
 
-		body, _ := ioutil.ReadAll(rdr1)
-		log.Printf("BODY: %s\n", string(body))
-
-		r.Body = rdr2
+		proxy.ReverseProxy.ServeHTTP(w, r)
+		return
 	}
+
 	if r.Method == "POST" {
 		log.Printf("PUT content-type: %s, accept: %v\n", r.Header["Content-Type"], r.Header["Accept"])
 
-		body, _ := ioutil.ReadAll(r.Body)
-		log.Printf("BODY: %s\n", string(body))
+		//body, _ := ioutil.ReadAll(r.Body)
+		//log.Printf("BODY: %s\n", string(body))
 
 		if strings.Contains(r.URL.String(), "bindings") {
+			var binding api.Binding
+
+			// TODO: dont panic on errors, push them to an error channel instead
+			body, err := ioutil.ReadAll(r.Body)
+			if err != nil {
+				panic(fmt.Sprintf("Error reading from request body: %v", err))
+			}
+			err = json.Unmarshal(body, &binding)
+			if err != nil {
+				panic(fmt.Sprintf("Error Unmarshalling request body: %v", err))
+			}
+
+			proxy.ResponseChannel <- binding
+
 			w.Header().Set("Content-Type", "application/json")
 			w.Write([]byte(bindingResponse))
 		} else if strings.Contains(r.URL.String(), "events") {
 			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
 			w.Write([]byte(eventResponse))
 		}
 
 		return
 	}
 
-	if strings.HasPrefix(r.URL.String(), "/api/v1/pods") {
-		log.Printf("URL: %v, %v, %v", r.URL, r.Method, r.Header["Accept"])
+	if strings.Contains(r.URL.String(), "api/v1/watch/pods") {
+		pod := proxy.podProvider.ProvidePod()
+		podEvent := PodEventFromPod(pod)
 
+		eventPodJSON, err := json.MarshalIndent(podEvent, "", "    ")
+		if err != nil {
+			panic("error marshalling pod event")
+			errorMessage := fmt.Sprintf("Error marshalling response: %\n", err)
+			http.Error(w, errorMessage, http.StatusInternalServerError)
+		}
+		eventPodJSON = append(eventPodJSON, []byte("\r\n")...)
+
+		log.Print(string(eventPodJSON))
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(eventPodJSON)
+
+		time.Sleep(5 * time.Second)
+		return
+	}
+
+	if strings.HasPrefix(r.URL.String(), "/api/v1/pods") {
 		if r.Method == "GET" {
-			podList := proxy.podProvider.ProvidePods()
+			podList := proxy.podProvider.ProvidePodList()
 
 			podJSON, err := json.Marshal(podList)
 			if err != nil {
@@ -113,6 +146,7 @@ func (proxy *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		} else {
 			http.Error(w, "error", http.StatusInternalServerError)
+			return
 		}
 	}
 

@@ -9,7 +9,7 @@ import (
 	"sync"
 )
 
-// TODO: add synchronization, a queue of pods instead of a single one
+// TODO: add synchronization, a queue of pods instead of a single pod?
 type UnscheduledPodProvider interface {
 	AddPod(pod *api.Pod) error
 	GetPod() (api.Pod, error)
@@ -21,43 +21,39 @@ var NoPods = errors.New("No pods to schedule.")
 type SinglePodProvider struct {
 	resourceVersion int64
 	currentPod      *api.Pod
-	Mutex           *sync.Mutex
+	mutex           *sync.Mutex
 }
 
 func New() *SinglePodProvider {
 	return &SinglePodProvider{
 		resourceVersion: 0,
-		Mutex:           &sync.Mutex{},
+		mutex:           &sync.Mutex{},
 	}
 }
 
 func (provider *SinglePodProvider) AddPod(pod *api.Pod) error {
-	provider.Mutex.Lock()
-	defer provider.Mutex.Unlock()
+	provider.mutex.Lock()
+	defer provider.mutex.Unlock()
 
 	provider.resourceVersion += 1
 
-	pod.Namespace = "default" // TODO: Maybe get from pod and if empty then assign default
+	pod.Namespace = "default" // TODO: get from pod and if empty then assign default
 	pod.SelfLink = "/api/v1/namespaces/" + pod.Namespace + "/pods/" + pod.Name
 	pod.ResourceVersion = strconv.FormatInt(provider.resourceVersion, 10)
 	pod.Status.Phase = "Pending"
 
 	provider.currentPod = pod
 
-	log.Printf("Added POD: %v\n", provider.currentPod)
-
 	return nil
 }
 
 func (provider *SinglePodProvider) GetPod() (api.Pod, error) {
-	provider.Mutex.Lock()
-	defer provider.Mutex.Unlock()
+	provider.mutex.Lock()
+	defer provider.mutex.Unlock()
 
 	if provider.currentPod == nil {
 		return api.Pod{}, NoPods
 	}
-
-	log.Print("GET POD() CALLED")
 
 	pod := *provider.currentPod
 	provider.currentPod = nil
@@ -66,8 +62,8 @@ func (provider *SinglePodProvider) GetPod() (api.Pod, error) {
 }
 
 func (provider *SinglePodProvider) Reset() error {
-	provider.Mutex.Lock()
-	defer provider.Mutex.Unlock()
+	provider.mutex.Lock()
+	defer provider.mutex.Unlock()
 
 	provider.currentPod = nil
 

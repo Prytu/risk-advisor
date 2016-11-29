@@ -14,6 +14,7 @@ type EventPod struct {
 	*api.Pod   `json:",inline"`
 }
 
+// This will be used in future in watchers
 func PodEventFromPod(pod *api.Pod) *PodEvent {
 	EventPod := &EventPod{
 		Kind:       "Pod",

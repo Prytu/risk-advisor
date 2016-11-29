@@ -14,9 +14,9 @@ import (
 
 type RiskAdvisorHandler struct {
 	server               *http.ServeMux
-	ProxyResponseChannel <-chan api.Binding
-	ErrorChannel         <-chan error
-	PodProvider          podprovider.UnscheduledPodProvider
+	proxyResponseChannel <-chan api.Binding
+	errorChannel         <-chan error
+	podProvider          podprovider.UnscheduledPodProvider
 }
 
 func New(proxyResponseChannel <-chan api.Binding, errorChannel <-chan error,
@@ -29,9 +29,9 @@ func New(proxyResponseChannel <-chan api.Binding, errorChannel <-chan error,
 
 	return &RiskAdvisorHandler{
 		server:               mux,
-		ProxyResponseChannel: proxyResponseChannel,
-		ErrorChannel:         errorChannel,
-		PodProvider:          podProvider,
+		proxyResponseChannel: proxyResponseChannel,
+		errorChannel:         errorChannel,
+		podProvider:          podProvider,
 	}
 }
 

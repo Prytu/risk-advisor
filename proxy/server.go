@@ -3,16 +3,18 @@ package proxy
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/Prytu/risk-advisor/podprovider"
-	"github.com/Prytu/risk-advisor/proxy/mocks"
 	"io/ioutil"
-	"k8s.io/kubernetes/pkg/api"
 	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"strings"
 	"time"
+
+	"k8s.io/kubernetes/pkg/api"
+
+	"github.com/Prytu/risk-advisor/podprovider"
+	"github.com/Prytu/risk-advisor/proxy/mocks"
 )
 
 type Proxy struct {
@@ -20,9 +22,11 @@ type Proxy struct {
 	ReverseProxy    *httputil.ReverseProxy
 	PodProvider     podprovider.UnscheduledPodProvider
 	ResponseChannel chan<- api.Binding
+	ErrorChannel    chan<- error
 }
 
-func New(serverURL string, podProvider podprovider.UnscheduledPodProvider, responseChannel chan<- api.Binding) (*Proxy, error) {
+func New(serverURL string, podProvider podprovider.UnscheduledPodProvider,
+	responseChannel chan<- api.Binding, errorChannel chan<- error) (*Proxy, error) {
 	masterURL, err := url.Parse(serverURL)
 	if err != nil {
 		return nil, err
@@ -33,23 +37,26 @@ func New(serverURL string, podProvider podprovider.UnscheduledPodProvider, respo
 		ReverseProxy:    httputil.NewSingleHostReverseProxy(masterURL),
 		PodProvider:     podProvider,
 		ResponseChannel: responseChannel,
+		ErrorChannel:    errorChannel,
 	}, nil
 }
 
 func (proxy *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "POST" {
-		log.Printf("POST REQUEST URL: %v, %v", r.URL, r.Method)
 		if strings.Contains(r.URL.String(), "bindings") {
 			var binding api.Binding
 
-			// TODO: dont panic on errors, push them to an error channel instead
 			body, err := ioutil.ReadAll(r.Body)
 			if err != nil {
-				panic(fmt.Sprintf("Error reading from request body: %v", err))
+				errWithMessage := fmt.Errorf("Error reading from request body: %v", err)
+				proxy.ErrorChannel <- errWithMessage
+				return
 			}
 			err = json.Unmarshal(body, &binding)
 			if err != nil {
-				panic(fmt.Sprintf("Error Unmarshalling request body: %v", err))
+				errWithMessage := fmt.Errorf("Error Unmarshalling request body: %v", err)
+				proxy.ErrorChannel <- errWithMessage
+				return
 			}
 
 			proxy.ResponseChannel <- binding
@@ -95,6 +102,8 @@ func (proxy *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// TODO: find a better way of error handling. This should probably let client know that an error ocurred before
+	// panicing.
 	if strings.HasPrefix(r.URL.String(), "/api/v1/pods") {
 		if r.Method == "GET" {
 			values := r.URL.Query()

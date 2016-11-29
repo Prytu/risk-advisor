@@ -13,12 +13,13 @@ const realApiserverURL = "http://localhost:8080"
 
 func main() {
 	responseChannel := make(chan api.Binding, 1)
+	errorChannel := make(chan error)
 	podProvider := podprovider.New()
 
 	// TODO: add error channel to both servers
-	raHandler := riskadvisorhandler.New(responseChannel, podProvider)
+	raHandler := riskadvisorhandler.New(responseChannel, errorChannel, podProvider)
 
-	apiserverProxy, err := proxy.New(realApiserverURL, podProvider, responseChannel)
+	apiserverProxy, err := proxy.New(realApiserverURL, podProvider, responseChannel, errorChannel)
 	if err != nil {
 		panic(err)
 	}

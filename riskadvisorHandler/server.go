@@ -15,17 +15,22 @@ import (
 type RiskAdvisorHandler struct {
 	server               *http.ServeMux
 	ProxyResponseChannel <-chan api.Binding
+	ErrorChannel         <-chan error
 	PodProvider          podprovider.UnscheduledPodProvider
 }
 
-func New(proxyResponseChannel <-chan api.Binding, podProvider podprovider.UnscheduledPodProvider) *RiskAdvisorHandler {
+func New(proxyResponseChannel <-chan api.Binding, errorChannel <-chan error,
+	podProvider podprovider.UnscheduledPodProvider) *RiskAdvisorHandler {
+
 	mux := http.NewServeMux()
-	adviseHandler := newAdviseHandler(proxyResponseChannel, podProvider)
+
+	adviseHandler := newAdviseHandler(proxyResponseChannel, errorChannel, podProvider)
 	mux.HandleFunc("/advise", adviseHandler)
 
 	return &RiskAdvisorHandler{
 		server:               mux,
 		ProxyResponseChannel: proxyResponseChannel,
+		ErrorChannel:         errorChannel,
 		PodProvider:          podProvider,
 	}
 }
@@ -34,7 +39,9 @@ func (handler *RiskAdvisorHandler) ServeHTTP(w http.ResponseWriter, r *http.Requ
 	handler.server.ServeHTTP(w, r)
 }
 
-func newAdviseHandler(responseChannel <-chan api.Binding, podProvider podprovider.UnscheduledPodProvider) func(responseWriter http.ResponseWriter, request *http.Request) {
+func newAdviseHandler(responseChannel <-chan api.Binding, errorChannel <-chan error,
+	podProvider podprovider.UnscheduledPodProvider) func(w http.ResponseWriter, r *http.Request) {
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		pod, err := parseAdviseRequestBody(r.Body)
 		if err != nil {
@@ -48,17 +55,24 @@ func newAdviseHandler(responseChannel <-chan api.Binding, podProvider podprovide
 			return
 		}
 
-		proxyResponse := <-responseChannel
+		select {
+		case proxyResponse := <-responseChannel:
+			responseJSON, err := json.MarshalIndent(proxyResponse, "", "  ")
+			if err != nil {
+				errorMessage := fmt.Sprintf("Error marshalling response: %v\n", err)
+				http.Error(w, errorMessage, http.StatusInternalServerError)
+				return
+			}
 
-		json, err := json.MarshalIndent(proxyResponse, "", "  ")
-		if err != nil {
-			errorMessage := fmt.Sprintf("Error marshalling response: %v\n", err)
+			w.Header().Set("Content-Type", "application/json")
+			w.Write(responseJSON)
+
+		case err := <-errorChannel:
+			errorMessage := fmt.Sprintf("Proxy error: %v\n", err)
 			http.Error(w, errorMessage, http.StatusInternalServerError)
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(json)
 		return
 	}
 }

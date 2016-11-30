@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	"k8s.io/kubernetes/pkg/api"
-	"log"
 	"strconv"
 	"sync"
 )

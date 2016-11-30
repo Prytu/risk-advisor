@@ -2,10 +2,10 @@ package podprovider
 
 import (
 	"errors"
-
-	"k8s.io/kubernetes/pkg/api"
 	"strconv"
 	"sync"
+
+	"k8s.io/kubernetes/pkg/api"
 )
 
 // TODO: add synchronization, a queue of pods instead of a single pod?

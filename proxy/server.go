@@ -16,14 +16,6 @@ import (
 	"github.com/Prytu/risk-advisor/podprovider"
 )
 
-// TODO: create a Binding object instead
-const bindingResponse = "{ " +
-	"\"kind\": \"Status\"," +
-	"\"apiVersion\": \"v1\"," +
-	"\"metadata\": {}," +
-	"\"status\": \"Success\"," +
-	"\"code\": 201}"
-
 type Proxy struct {
 	masterURL       *url.URL
 	reverseProxy    *httputil.ReverseProxy
@@ -34,6 +26,7 @@ type Proxy struct {
 
 func New(serverURL string, podProvider podprovider.UnscheduledPodProvider,
 	responseChannel chan<- api.Binding, errorChannel chan<- error) (*Proxy, error) {
+
 	masterURL, err := url.Parse(serverURL)
 	if err != nil {
 		return nil, err
@@ -51,29 +44,30 @@ func New(serverURL string, podProvider podprovider.UnscheduledPodProvider,
 // TODO: find a better way of error handling. This should probably let client know that an error ocurred before panicing.
 // We probably want the panic tho, to spot bugs as soon as possible.
 func (proxy *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	requestURL := r.URL.String()
+
 	if r.Method == "POST" {
-		if strings.Contains(r.URL.String(), "bindings") {
-			log.Printf("POST binding, url = %v", r.URL.String())
+		if strings.Contains(requestURL, "bindings") {
 			proxy.handleBindings(w, r)
-		} else if strings.Contains(r.URL.String(), "events") {
+		} else if strings.Contains(requestURL, "events") {
 			proxy.handleEvents(w)
 		} else {
-			panic(fmt.Sprintf("Unexpected POST at URL: %s\n", r.URL.String()))
+			panic(fmt.Sprintf("Unexpected POST at URL: %s\n", requestURL))
 		}
 		return
 	}
 
-	if strings.Contains(r.URL.String(), "api/v1/watch/pods") {
+	if strings.Contains(requestURL, "api/v1/watch/pods") {
 		proxy.handleWatches(w, r)
 		return
 	}
 
-	if strings.HasPrefix(r.URL.String(), "/api/v1/pods") {
+	if strings.HasPrefix(requestURL, "/api/v1/pods") {
 		if r.Method == "GET" {
 			proxy.handleGetPods(w, r)
 			return
 		} else {
-			panic(fmt.Sprintf("Unexpected Request type: %v at URL: %s\n", r.Method, r.URL.String()))
+			panic(fmt.Sprintf("Unexpected Request type: %v at URL: %s\n", r.Method, requestURL))
 		}
 	}
 
@@ -109,7 +103,7 @@ func (proxy *Proxy) handleEvents(w http.ResponseWriter) {
 }
 
 func (proxy *Proxy) handleWatches(w http.ResponseWriter, r *http.Request) {
-	time.Sleep(5 * time.Second)
+	time.Sleep(2 * time.Second)
 	w.Write([]byte(""))
 }
 

@@ -1,5 +1,7 @@
 package riskadvisor
 
+import "k8s.io/kubernetes/pkg/api"
+
 type AdviceRequest struct {
 	Id  int     `json:"id"`
 	Pod api.Pod `json:"pod"`

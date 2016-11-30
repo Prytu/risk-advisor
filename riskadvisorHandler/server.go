@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"k8s.io/kubernetes/pkg/api"
 	"net/http"
+
+	"k8s.io/kubernetes/pkg/api"
 
 	"github.com/Prytu/risk-advisor/podprovider"
 )

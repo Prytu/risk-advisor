@@ -1,4 +1,4 @@
-package proxy
+package app
 
 import (
 	"encoding/json"
@@ -13,7 +13,7 @@ import (
 
 	"k8s.io/kubernetes/pkg/api"
 
-	"github.com/Prytu/risk-advisor/podprovider"
+	"github.com/Prytu/risk-advisor/cmd/proxy/app/podprovider"
 )
 
 type Proxy struct {

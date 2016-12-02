@@ -7,41 +7,37 @@ import (
 	"net/http"
 
 	"github.com/emicklei/go-restful"
+
 	"k8s.io/kubernetes/pkg/api"
 )
 
 type AdviceService struct {
 	proxyUrl string
-	lastId   int
 }
 
 func New(proxyUrl string) http.Handler {
-	as := AdviceService{proxyUrl: proxyUrl, lastId: 1}
+	as := AdviceService{proxyUrl}
 	wsContainer := restful.NewContainer()
 	as.Register(wsContainer)
 	return wsContainer
 }
 
-func (a *AdviceService) sendAdviceRequest(request *restful.Request, response *restful.Response) {
-	//TODO: do this atomically
-	thisId := a.lastId
-	a.lastId++
-
-	pod := new(api.Pod)
+func (as *AdviceService) sendAdviceRequest(request *restful.Request, response *restful.Response) {
+	var pod api.Pod
 	err := request.ReadEntity(&pod)
 	if err != nil {
 		response.WriteError(http.StatusInternalServerError, err)
 		return
 	}
 
-	ar := AdviceRequest{thisId, *pod}
+	ar := AdviceRequest{&pod}
 	arJSON, err := json.Marshal(ar)
 	if err != nil {
 		response.WriteError(http.StatusInternalServerError, err)
 		return
 	}
 
-	resp, err := http.Post(a.proxyUrl, "application/json", bytes.NewReader(arJSON))
+	resp, err := http.Post(as.proxyUrl, "application/json", bytes.NewReader(arJSON))
 	if err != nil {
 		response.WriteError(http.StatusNotFound, err)
 		return
@@ -53,15 +49,15 @@ func (a *AdviceService) sendAdviceRequest(request *restful.Request, response *re
 		return
 	}
 
-	binding := api.Binding{}
+	var binding api.Binding
 	err = json.Unmarshal(bindingJSON, &binding)
 	if err != nil {
 		response.WriteError(http.StatusExpectationFailed, err)
 		return
 	}
 
-	status := AdviceStatus{thisId, "OK", binding}
-	response.WriteEntity(status)
+	proxyResponse := AdviceResponse{"OK", binding}
+	response.WriteEntity(proxyResponse)
 }
 
 func (as *AdviceService) Register(container *restful.Container) {
@@ -74,7 +70,7 @@ func (as *AdviceService) Register(container *restful.Container) {
 		// Documentation
 		Doc("Post a request for advice").
 		Reads(api.Pod{}).
-		Returns(200, "OK", AdviceStatus{}))
+		Returns(200, "OK", AdviceResponse{}))
 
 	container.Add(ws)
 }

@@ -1,4 +1,4 @@
-package proxy
+package app
 
 import (
 	"k8s.io/kubernetes/pkg/api"

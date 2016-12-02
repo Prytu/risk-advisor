@@ -1,4 +1,4 @@
-package riskadvisor
+package app
 
 import (
 	"bytes"
@@ -8,6 +8,7 @@ import (
 
 	"github.com/emicklei/go-restful"
 
+	"github.com/Prytu/risk-advisor/pkg/model"
 	"k8s.io/kubernetes/pkg/api"
 )
 
@@ -30,7 +31,7 @@ func (as *AdviceService) sendAdviceRequest(request *restful.Request, response *r
 		return
 	}
 
-	ar := AdviceRequest{&pod}
+	ar := model.AdviceRequest{&pod}
 	arJSON, err := json.Marshal(ar)
 	if err != nil {
 		response.WriteError(http.StatusInternalServerError, err)

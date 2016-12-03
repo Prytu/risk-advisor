@@ -2,6 +2,9 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: risk-advisor
+  labels: {
+   name: risk-advisor
+  }
 spec:
   containers: [
     {
@@ -24,15 +27,42 @@ spec:
           containerPort: 9997 
         }
       ]
-    },	
+    },
     {
-      name: kube-scheduler,
-      image: gcr.io/google_containers/kube-scheduler,
-      ports: [
-        { 
-          containerPort: 10251 
-        }
+      name: kubescheduler,
+      image: "gcr.io/google_containers/kube-scheduler:v1.4.6",
+      command: ["/bin/sh", "-c",  "/usr/local/bin/kube-scheduler --master=127.0.0.1:9999 --leader-elect=false --kube-api-content-type application/json"],
+      livenessProbe:
+      {
+        httpGet: 
+        {
+          path: /healthz,
+          port: 10251
+        },
+        initialDelaySeconds: 15,
+        timeoutSeconds: 1
+      }
+    },
+    {
+      name: "kubectl",
+      image: "gcr.io/google_containers/kubectl:v0.18.0-120-gaeb4ac55ad12b1-dirty",
+      imagePullPolicy: "Always",
+      args: [
+        "proxy", "-p", "8080"
       ]
     }
   ]
-
+----
+apiVersion: v1
+kind: Service
+metadata:
+  name: risk-advisor-service
+  labels:
+    name: risk-advisor
+spec:
+  type: NodePort
+  ports:
+    - port: 11111
+      targetPort: 9997
+  selector:
+    name: risk-advisor

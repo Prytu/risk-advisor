@@ -38,7 +38,7 @@ func (as *AdviceService) sendAdviceRequest(request *restful.Request, response *r
 		return
 	}
 
-	resp, err := http.Post(as.proxyUrl, "application/json", bytes.NewReader(arJSON))
+	resp, err := http.Post(as.proxyUrl+"/advise", "application/json", bytes.NewReader(arJSON))
 	if err != nil {
 		response.WriteError(http.StatusNotFound, err)
 		return

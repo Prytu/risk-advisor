@@ -22,7 +22,7 @@ func init() {
 		Code:     201,
 	})
 	if err != nil {
-		panic(fmt.Sprintf("Initialization error  while marshalling binding response: %v", err))
+		panic(fmt.Sprintf("Initialization error while marshalling binding response: %v", err))
 	}
 
 	bindingResponse = bindingResponseJSON

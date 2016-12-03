@@ -4,19 +4,20 @@ import (
 	"log"
 	"net/http"
 
+	flag "github.com/spf13/pflag"
+
 	"github.com/Prytu/risk-advisor/cmd/riskadvisor/app"
+	"github.com/Prytu/risk-advisor/pkg/flags"
 )
 
-// read from somewhere
-const riskAdvisorPort = ":9997"
-const proxyRACommunicationPort = ":9998"
-const proxyURL = "http://localhost" + proxyRACommunicationPort + "/advise"
-
 func main() {
-	// TODO: Ugly, but will be fixed in issue #11
-	riskAdvisor := app.New(proxyURL)
+	proxyAddress := flag.String("proxy", defaults.ProxyAddress, "Address on which proxy runs")
+	port := flag.String("port", defaults.RiskAdvisorUserPort, "Port on which risk-advisors listens for users requests")
+	flag.Parse()
 
-	log.Printf("Starting risk-advisor with:\n\t- port: %v\n\t- proxy URL: %v", riskAdvisorPort, proxyURL)
+	riskAdvisor := app.New(*proxyAddress)
 
-	http.ListenAndServe(riskAdvisorPort, riskAdvisor)
+	log.Printf("Starting risk-advisor with:\n\t- port: %v\n\t- proxy URL: %v", *port, *proxyAddress)
+
+	http.ListenAndServe(":"+*port, riskAdvisor)
 }

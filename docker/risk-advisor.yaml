@@ -3,8 +3,36 @@ kind: Pod
 metadata:
   name: risk-advisor
 spec:
-  containers:
-  - name: risk-advisor
-    image: pposkrobko/risk-advisor
-    ports:
-    - containerPort: 11111 
+  containers: [
+    {
+      name: proxy,
+      image: pposkrobko/proxy,
+      ports: [
+        { 
+          containerPort: 9999 
+        },
+        {
+          containerPort: 9998
+        }
+      ]
+    },
+    {
+      name: riskadvisor,
+      image: pposkrobko/riskadvisor,
+      ports: [
+        { 
+          containerPort: 9997 
+        }
+      ]
+    },	
+    {
+      name: kube-scheduler,
+      image: gcr.io/google_containers/kube-scheduler,
+      ports: [
+        { 
+          containerPort: 10251 
+        }
+      ]
+    }
+  ]
+

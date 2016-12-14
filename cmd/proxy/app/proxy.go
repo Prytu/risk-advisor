@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"sync"
 
 	"k8s.io/kubernetes/pkg/api"
 
@@ -17,11 +18,13 @@ import (
 )
 
 type Proxy struct {
-	masterURL       *url.URL
-	reverseProxy    *httputil.ReverseProxy
-	podProvider     podprovider.UnscheduledPodProvider
-	responseChannel chan<- api.Binding
-	errorChannel    chan<- error
+	masterURL       	*url.URL
+	reverseProxy    	*httputil.ReverseProxy
+	podProvider     	podprovider.UnscheduledPodProvider
+	responseChannel 	chan<- api.Binding
+	errorChannel    	chan<- error
+	nodesMutex 		sync.Mutex
+	isNodesRequestHandled 	bool
 }
 
 func New(serverURL string, podProvider podprovider.UnscheduledPodProvider,
@@ -32,12 +35,19 @@ func New(serverURL string, podProvider podprovider.UnscheduledPodProvider,
 		return nil, err
 	}
 
+	//Mutex to lock response asking for pods to schedule until response for nodes
+	nodesMutex := sync.Mutex{}
+	//nodesMutex is locked by default, will be unlocked as soon as nodes request is handled
+	nodesMutex.Lock()
+
 	return &Proxy{
-		masterURL:       masterURL,
-		reverseProxy:    httputil.NewSingleHostReverseProxy(masterURL),
-		podProvider:     podProvider,
-		responseChannel: responseChannel,
-		errorChannel:    errorChannel,
+		masterURL:       	masterURL,
+		reverseProxy:    	httputil.NewSingleHostReverseProxy(masterURL),
+		podProvider:     	podProvider,
+		responseChannel: 	responseChannel,
+		errorChannel:    	errorChannel,
+		nodesMutex:	 	nodesMutex,
+		isNodesRequestHandled: 	false,
 	}, nil
 }
 
@@ -57,6 +67,16 @@ func (proxy *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if strings.Contains(requestURL, "/api/v1/nodes") {
+		proxy.reverseProxy.ServeHTTP(w, r)
+		if !proxy.isNodesRequestHandled {
+			proxy.isNodesRequestHandled = true
+			proxy.nodesMutex.Unlock()
+			fmt.Println("Mutex unlocked by nodes request" + requestURL)
+		}
+		return
+	}
+
 	if strings.Contains(requestURL, "api/v1/watch/pods") {
 		proxy.handleWatches(w, r)
 		return
@@ -64,6 +84,12 @@ func (proxy *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if strings.HasPrefix(requestURL, "/api/v1/pods") {
 		if r.Method == "GET" {
+			fmt.Println("Trying to lock mutex for pods request")
+			proxy.nodesMutex.Lock()
+			fmt.Println("Mutex locked by pods request")
+			proxy.nodesMutex.Unlock()
+			//Temporary solution: sleep 1 second to make sure response to nodes request is delivered to client
+			time.Sleep(time.Second)
 			proxy.handleGetPods(w, r)
 			return
 		} else {

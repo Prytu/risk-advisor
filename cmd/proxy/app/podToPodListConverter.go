@@ -2,16 +2,16 @@ package app
 
 import (
 	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/api/unversioned"
+	"k8s.io/kubernetes/pkg/apis/meta/v1"
 )
 
 func PodListFromPod(pod *api.Pod) *api.PodList {
-	typeMeta := unversioned.TypeMeta{
+	typeMeta := v1.TypeMeta{
 		Kind:       "PodList",
 		APIVersion: "v1",
 	}
 
-	listMeta := unversioned.ListMeta{
+	listMeta := v1.ListMeta{
 		SelfLink:        "/api/v1/pods",
 		ResourceVersion: "1",
 	}
@@ -24,12 +24,12 @@ func PodListFromPod(pod *api.Pod) *api.PodList {
 }
 
 func EmptyPodList() *api.PodList {
-	typeMeta := unversioned.TypeMeta{
+	typeMeta := v1.TypeMeta{
 		Kind:       "PodList",
 		APIVersion: "v1",
 	}
 
-	listMeta := unversioned.ListMeta{
+	listMeta := v1.ListMeta{
 		SelfLink:        "/api/v1/pods",
 		ResourceVersion: "1",
 	}

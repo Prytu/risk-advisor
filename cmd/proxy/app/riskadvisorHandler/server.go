@@ -11,27 +11,27 @@ import (
 	"k8s.io/kubernetes/pkg/api"
 
 	"github.com/Prytu/risk-advisor/cmd/proxy/app/podprovider"
+	"github.com/Prytu/risk-advisor/pkg/model"
+	"log"
+	"strings"
 )
 
 type RiskAdvisorHandler struct {
 	server               *http.ServeMux
-	proxyResponseChannel <-chan api.Binding
-	errorChannel         <-chan error
+	proxyResponseChannel <-chan interface{}
 	podProvider          podprovider.UnscheduledPodProvider
 }
 
-func New(proxyResponseChannel <-chan api.Binding, errorChannel <-chan error,
-	podProvider podprovider.UnscheduledPodProvider) *RiskAdvisorHandler {
+func New(proxyResponseChannel <-chan interface{}, podProvider podprovider.UnscheduledPodProvider) *RiskAdvisorHandler {
 
 	mux := http.NewServeMux()
 
-	adviseHandler := newAdviseHandler(proxyResponseChannel, errorChannel, podProvider)
+	adviseHandler := newAdviseHandler(proxyResponseChannel, podProvider)
 	mux.HandleFunc("/advise", adviseHandler)
 
 	return &RiskAdvisorHandler{
 		server:               mux,
 		proxyResponseChannel: proxyResponseChannel,
-		errorChannel:         errorChannel,
 		podProvider:          podProvider,
 	}
 }
@@ -40,7 +40,7 @@ func (handler *RiskAdvisorHandler) ServeHTTP(w http.ResponseWriter, r *http.Requ
 	handler.server.ServeHTTP(w, r)
 }
 
-func newAdviseHandler(responseChannel <-chan api.Binding, errorChannel <-chan error,
+func newAdviseHandler(responseChannel <-chan interface{},
 	podProvider podprovider.UnscheduledPodProvider) func(w http.ResponseWriter, r *http.Request) {
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -50,28 +50,27 @@ func newAdviseHandler(responseChannel <-chan api.Binding, errorChannel <-chan er
 			return
 		}
 
+		log.Printf("\n\nPROXY POD: %v\n", pod)
+
 		if err = podProvider.AddPod(pod); err != nil {
 			errorMessage := fmt.Sprintf("Error adding pod: %v\n", err)
 			http.Error(w, errorMessage, http.StatusInternalServerError)
 			return
 		}
 
-		select {
-		case proxyResponse := <-responseChannel:
-			responseJSON, err := json.MarshalIndent(proxyResponse, "", "  ")
-			if err != nil {
-				errorMessage := fmt.Sprintf("Error marshalling response: %v\n", err)
-				http.Error(w, errorMessage, http.StatusInternalServerError)
-				return
-			}
+		proxyResponse := <-responseChannel
+		switch proxyResponse := proxyResponse.(type) {
+		case api.Binding:
+			message := fmt.Sprintf("Pod %s has been sucessfully scheduled on node %v.", pod.Name, proxyResponse.Target.Name)
+			respond("Success", message, w)
 
-			w.Header().Set("Content-Type", "application/json")
-			w.Write(responseJSON)
+		case model.FailedSchedulingResponse:
+			message := strings.Replace(proxyResponse.Message, "\n", " ", -1)
+			respond("Failure", message, w)
 
-		case err := <-errorChannel:
-			errorMessage := fmt.Sprintf("Proxy error: %v\n", err)
-			http.Error(w, errorMessage, http.StatusInternalServerError)
-			return
+		case error:
+			log.Print(fmt.Sprintf("Proxy error: %v\n", proxyResponse))
+			http.Error(w, "Internal server error.", http.StatusInternalServerError)
 		}
 
 		return
@@ -85,13 +84,29 @@ func parseAdviseRequestBody(requestBody io.ReadCloser) (*api.Pod, error) {
 		return nil, errors.New(errorMessage)
 	}
 
-	var pod api.Pod
+	var adviceRequest model.AdviceRequest
 
-	err = json.Unmarshal(body, &pod)
+	err = json.Unmarshal(body, &adviceRequest)
 	if err != nil {
 		errorMessage := fmt.Sprintf("Error unmarshalling body: %v\n", err)
 		return nil, errors.New(errorMessage)
 	}
 
-	return &pod, nil
+	return adviceRequest.Pod, nil
+}
+
+func respond(status, message string, w http.ResponseWriter) {
+	response := model.ProxyResponse{
+		Status:  status,
+		Message: message,
+	}
+
+	responseJSON, err := json.MarshalIndent(response, "", "  ")
+	if err != nil {
+		log.Printf("Error marshalling response: %v\n", err)
+		http.Error(w, "Internal server error.", http.StatusInternalServerError)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(responseJSON)
 }

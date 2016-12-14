@@ -25,11 +25,20 @@ func New(proxyUrl string) http.Handler {
 
 func (as *AdviceService) sendAdviceRequest(request *restful.Request, response *restful.Response) {
 	var pod api.Pod
-	err := request.ReadEntity(&pod)
+	//err := request.ReadEntity(pod)
+
+	/* narazie pazdzierz */
+	body, err := ioutil.ReadAll(request.Request.Body)
 	if err != nil {
 		response.WriteError(http.StatusInternalServerError, err)
 		return
 	}
+	err = json.Unmarshal(body, &pod)
+	if err != nil {
+		response.WriteError(http.StatusInternalServerError, err)
+		return
+	}
+	/* koniec pazdzierza */
 
 	ar := model.AdviceRequest{&pod}
 	arJSON, err := json.Marshal(ar)
@@ -44,21 +53,24 @@ func (as *AdviceService) sendAdviceRequest(request *restful.Request, response *r
 		return
 	}
 
-	bindingJSON, err := ioutil.ReadAll(resp.Body)
+	responseJSON, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		response.WriteError(http.StatusInternalServerError, err)
 		return
 	}
 
-	var binding api.Binding
-	err = json.Unmarshal(bindingJSON, &binding)
+	var proxyResponse model.ProxyResponse
+	err = json.Unmarshal(responseJSON, &proxyResponse)
 	if err != nil {
 		response.WriteError(http.StatusExpectationFailed, err)
 		return
 	}
 
-	proxyResponse := AdviceResponse{"OK", binding}
-	response.WriteEntity(proxyResponse)
+	adviseResponse := AdviceResponse{
+		Status: proxyResponse.Status,
+		Result: proxyResponse.Message,
+	}
+	response.WriteEntity(adviseResponse)
 }
 
 func (as *AdviceService) Register(container *restful.Container) {

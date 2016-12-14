@@ -4,13 +4,11 @@ import (
 	"log"
 	"net/http"
 
-	flag "github.com/spf13/pflag"
-	"k8s.io/kubernetes/pkg/api"
-
 	"github.com/Prytu/risk-advisor/cmd/proxy/app"
 	"github.com/Prytu/risk-advisor/cmd/proxy/app/podprovider"
 	"github.com/Prytu/risk-advisor/cmd/proxy/app/riskadvisorHandler"
 	"github.com/Prytu/risk-advisor/pkg/flags"
+	flag "github.com/spf13/pflag"
 )
 
 func main() {
@@ -19,13 +17,12 @@ func main() {
 	schedulerCommunicationPort := flag.String("scheduler-port", defaults.SchedulerCommunicationPort, "Port for communication with scheduler")
 	flag.Parse()
 
-	responseChannel := make(chan api.Binding, 1)
-	errorChannel := make(chan error)
+	responseChannel := make(chan interface{}, 1)
 	podProvider := podprovider.New()
 
-	raHandler := riskadvisorhandler.New(responseChannel, errorChannel, podProvider)
+	raHandler := riskadvisorhandler.New(responseChannel, podProvider)
 
-	proxy, err := app.New(*apiserverAddress, podProvider, responseChannel, errorChannel)
+	proxy, err := app.New(*apiserverAddress, podProvider, responseChannel)
 	if err != nil {
 		panic(err)
 	}

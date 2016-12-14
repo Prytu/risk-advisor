@@ -9,26 +9,25 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"strings"
-	"time"
 	"sync"
+	"time"
 
 	"k8s.io/kubernetes/pkg/api"
 
 	"github.com/Prytu/risk-advisor/cmd/proxy/app/podprovider"
+	"github.com/Prytu/risk-advisor/pkg/model"
 )
 
 type Proxy struct {
-	masterURL       	*url.URL
-	reverseProxy    	*httputil.ReverseProxy
-	podProvider     	podprovider.UnscheduledPodProvider
-	responseChannel 	chan<- api.Binding
-	errorChannel    	chan<- error
-	nodesMutex 		sync.Mutex
-	isNodesRequestHandled 	bool
+	masterURL             *url.URL
+	reverseProxy          *httputil.ReverseProxy
+	podProvider           podprovider.UnscheduledPodProvider
+	responseChannel       chan<- interface{}
+	nodesMutex            sync.Mutex
+	isNodesRequestHandled bool
 }
 
-func New(serverURL string, podProvider podprovider.UnscheduledPodProvider,
-	responseChannel chan<- api.Binding, errorChannel chan<- error) (*Proxy, error) {
+func New(serverURL string, podProvider podprovider.UnscheduledPodProvider, responseChannel chan<- interface{}) (*Proxy, error) {
 
 	masterURL, err := url.Parse(serverURL)
 	if err != nil {
@@ -41,13 +40,12 @@ func New(serverURL string, podProvider podprovider.UnscheduledPodProvider,
 	nodesMutex.Lock()
 
 	return &Proxy{
-		masterURL:       	masterURL,
-		reverseProxy:    	httputil.NewSingleHostReverseProxy(masterURL),
-		podProvider:     	podProvider,
-		responseChannel: 	responseChannel,
-		errorChannel:    	errorChannel,
-		nodesMutex:	 	nodesMutex,
-		isNodesRequestHandled: 	false,
+		masterURL:             masterURL,
+		reverseProxy:          httputil.NewSingleHostReverseProxy(masterURL),
+		podProvider:           podProvider,
+		responseChannel:       responseChannel,
+		nodesMutex:            nodesMutex,
+		isNodesRequestHandled: false,
 	}, nil
 }
 
@@ -60,7 +58,7 @@ func (proxy *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(requestURL, "bindings") {
 			proxy.handleBindings(w, r)
 		} else if strings.Contains(requestURL, "events") {
-			proxy.handleEvents(w)
+			proxy.handleEvents(w, r)
 		} else {
 			panic(fmt.Sprintf("Unexpected POST at URL: %s\n", requestURL))
 		}
@@ -106,13 +104,13 @@ func (proxy *Proxy) handleBindings(w http.ResponseWriter, r *http.Request) {
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		errWithMessage := fmt.Errorf("Error reading from request body: %v", err)
-		proxy.errorChannel <- errWithMessage
+		proxy.responseChannel <- errWithMessage
 		return
 	}
 	err = json.Unmarshal(body, &binding)
 	if err != nil {
 		errWithMessage := fmt.Errorf("Error Unmarshalling request body: %v", err)
-		proxy.errorChannel <- errWithMessage
+		proxy.responseChannel <- errWithMessage
 		return
 	}
 
@@ -122,14 +120,39 @@ func (proxy *Proxy) handleBindings(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(bindingResponse))
 }
 
-func (proxy *Proxy) handleEvents(w http.ResponseWriter) {
+func (proxy *Proxy) handleEvents(w http.ResponseWriter, r *http.Request) {
+	var event api.Event
+
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		errWithMessage := fmt.Errorf("Error reading from request body: %v", err)
+		proxy.responseChannel <- errWithMessage
+		return
+	}
+
+	err = json.Unmarshal(body, &event)
+	if err != nil {
+		errWithMessage := fmt.Errorf("Error Unmarshalling request body: %v", err)
+		proxy.responseChannel <- errWithMessage
+		return
+	}
+
+	if strings.Contains(event.Reason, "FailedScheduling") {
+		failedSchedulingResponse := model.FailedSchedulingResponse{
+			Reason:  event.Reason,
+			Message: event.Message,
+		}
+
+		proxy.responseChannel <- failedSchedulingResponse
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusConflict)
 	w.Write([]byte(""))
 }
 
 func (proxy *Proxy) handleWatches(w http.ResponseWriter, r *http.Request) {
-	time.Sleep(2 * time.Second)
+	//time.Sleep(2 * time.Second)
 	w.Write([]byte(""))
 }
 

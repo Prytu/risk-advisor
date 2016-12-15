@@ -9,7 +9,7 @@ import (
 	"github.com/emicklei/go-restful"
 
 	"github.com/Prytu/risk-advisor/pkg/model"
-	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/v1"
 )
 
 type AdviceService struct {
@@ -24,7 +24,7 @@ func New(proxyUrl string) http.Handler {
 }
 
 func (as *AdviceService) sendAdviceRequest(request *restful.Request, response *restful.Response) {
-	var pod api.Pod
+	var pod v1.Pod
 	//err := request.ReadEntity(pod)
 
 	/* narazie pazdzierz */
@@ -82,7 +82,7 @@ func (as *AdviceService) Register(container *restful.Container) {
 	ws.Route(ws.POST("").To(as.sendAdviceRequest).
 		// Documentation
 		Doc("Post a request for advice").
-		Reads(api.Pod{}).
+		Reads(v1.Pod{}).
 		Returns(200, "OK", AdviceResponse{}))
 
 	container.Add(ws)

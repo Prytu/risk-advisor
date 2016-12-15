@@ -12,10 +12,9 @@ import (
 	"sync"
 	"time"
 
-	"k8s.io/kubernetes/pkg/api"
-
 	"github.com/Prytu/risk-advisor/cmd/proxy/app/podprovider"
 	"github.com/Prytu/risk-advisor/pkg/model"
+	"k8s.io/kubernetes/pkg/api/v1"
 )
 
 type Proxy struct {
@@ -99,7 +98,7 @@ func (proxy *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (proxy *Proxy) handleBindings(w http.ResponseWriter, r *http.Request) {
-	var binding api.Binding
+	var binding v1.Binding
 
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
@@ -121,7 +120,7 @@ func (proxy *Proxy) handleBindings(w http.ResponseWriter, r *http.Request) {
 }
 
 func (proxy *Proxy) handleEvents(w http.ResponseWriter, r *http.Request) {
-	var event api.Event
+	var event v1.Event
 
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
@@ -177,7 +176,7 @@ func (proxy *Proxy) handleGetPods(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var podList *api.PodList
+	var podList *v1.PodList
 
 	pod, err := proxy.podProvider.GetPod()
 	if err != nil {

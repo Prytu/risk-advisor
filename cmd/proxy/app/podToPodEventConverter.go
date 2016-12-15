@@ -1,6 +1,6 @@
 package app
 
-import "k8s.io/kubernetes/pkg/api"
+import "k8s.io/kubernetes/pkg/api/v1"
 
 // TODO: Use models from kubernetes instead
 type PodEvent struct {
@@ -11,11 +11,11 @@ type PodEvent struct {
 type EventPod struct {
 	Kind       string `json:"kind"`
 	ApiVersion string `json:"apiVersion"`
-	*api.Pod   `json:",inline"`
+	*v1.Pod    `json:",inline"`
 }
 
 // This will be used in future in watchers
-func PodEventFromPod(pod *api.Pod) *PodEvent {
+func PodEventFromPod(pod *v1.Pod) *PodEvent {
 	EventPod := &EventPod{
 		Kind:       "Pod",
 		ApiVersion: "v1",

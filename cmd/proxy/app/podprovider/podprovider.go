@@ -5,13 +5,13 @@ import (
 	"strconv"
 	"sync"
 
-	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/v1"
 )
 
 // TODO: add synchronization, a queue of pods instead of a single pod?
 type UnscheduledPodProvider interface {
-	AddPod(pod *api.Pod) error
-	GetPod() (api.Pod, error)
+	AddPod(pod *v1.Pod) error
+	GetPod() (v1.Pod, error)
 	Reset() error
 }
 
@@ -19,7 +19,7 @@ var NoPods = errors.New("No pods to schedule.")
 
 type SinglePodProvider struct {
 	resourceVersion int64
-	currentPod      *api.Pod
+	currentPod      *v1.Pod
 	mutex           *sync.Mutex
 }
 
@@ -30,7 +30,7 @@ func New() *SinglePodProvider {
 	}
 }
 
-func (provider *SinglePodProvider) AddPod(pod *api.Pod) error {
+func (provider *SinglePodProvider) AddPod(pod *v1.Pod) error {
 	provider.mutex.Lock()
 	defer provider.mutex.Unlock()
 
@@ -46,12 +46,12 @@ func (provider *SinglePodProvider) AddPod(pod *api.Pod) error {
 	return nil
 }
 
-func (provider *SinglePodProvider) GetPod() (api.Pod, error) {
+func (provider *SinglePodProvider) GetPod() (v1.Pod, error) {
 	provider.mutex.Lock()
 	defer provider.mutex.Unlock()
 
 	if provider.currentPod == nil {
-		return api.Pod{}, NoPods
+		return v1.Pod{}, NoPods
 	}
 
 	pod := *provider.currentPod

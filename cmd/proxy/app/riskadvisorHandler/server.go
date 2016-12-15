@@ -8,10 +8,9 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	"k8s.io/kubernetes/pkg/api"
-
 	"github.com/Prytu/risk-advisor/cmd/proxy/app/podprovider"
 	"github.com/Prytu/risk-advisor/pkg/model"
+	"k8s.io/kubernetes/pkg/api/v1"
 	"log"
 	"strings"
 )
@@ -60,7 +59,7 @@ func newAdviseHandler(responseChannel <-chan interface{},
 
 		proxyResponse := <-responseChannel
 		switch proxyResponse := proxyResponse.(type) {
-		case api.Binding:
+		case v1.Binding:
 			message := fmt.Sprintf("Pod %s has been sucessfully scheduled on node %v.", pod.Name, proxyResponse.Target.Name)
 			respond("Success", message, w)
 
@@ -77,7 +76,7 @@ func newAdviseHandler(responseChannel <-chan interface{},
 	}
 }
 
-func parseAdviseRequestBody(requestBody io.ReadCloser) (*api.Pod, error) {
+func parseAdviseRequestBody(requestBody io.ReadCloser) (*v1.Pod, error) {
 	body, err := ioutil.ReadAll(requestBody)
 	if err != nil {
 		errorMessage := fmt.Sprintf("Error reading request body: %v\n", err)

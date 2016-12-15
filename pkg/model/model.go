@@ -1,9 +1,9 @@
 package model
 
-import "k8s.io/kubernetes/pkg/api"
+import "k8s.io/kubernetes/pkg/api/v1"
 
 type AdviceRequest struct {
-	Pod *api.Pod `json:"pod"`
+	Pod *v1.Pod `json:"pod"`
 }
 
 type ProxyResponse struct {

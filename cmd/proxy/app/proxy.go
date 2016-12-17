@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Prytu/risk-advisor/cmd/proxy/app/podprovider"
+	"github.com/Prytu/risk-advisor/cmd/proxy/app/watcher"
 	"github.com/Prytu/risk-advisor/pkg/model"
 	"k8s.io/kubernetes/pkg/api/v1"
 )
@@ -24,6 +25,8 @@ type Proxy struct {
 	responseChannel       chan<- interface{}
 	nodesMutex            sync.Mutex
 	isNodesRequestHandled bool
+	unscheduledPodWatcher *watcher.Watcher
+	scheduledPodWatcher   *watcher.Watcher
 }
 
 func New(serverURL string, podProvider podprovider.UnscheduledPodProvider, responseChannel chan<- interface{}) (*Proxy, error) {
@@ -37,6 +40,8 @@ func New(serverURL string, podProvider podprovider.UnscheduledPodProvider, respo
 	nodesMutex := sync.Mutex{}
 	//nodesMutex is locked by default, will be unlocked as soon as nodes request is handled
 	nodesMutex.Lock()
+	usPW := watcher.NewWatcher() //TODO: temporary hack, probably won't be needed if we don't have SinglePodProvider
+	podProvider.SetWatcher(usPW)
 
 	return &Proxy{
 		masterURL:             masterURL,
@@ -45,6 +50,8 @@ func New(serverURL string, podProvider podprovider.UnscheduledPodProvider, respo
 		responseChannel:       responseChannel,
 		nodesMutex:            nodesMutex,
 		isNodesRequestHandled: false,
+		unscheduledPodWatcher: usPW,
+		scheduledPodWatcher:   watcher.NewWatcher(),
 	}, nil
 }
 
@@ -75,7 +82,7 @@ func (proxy *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if strings.Contains(requestURL, "api/v1/watch/pods") {
-		proxy.handleWatches(w, r)
+		proxy.handlePodWatches(w, r)
 		return
 	}
 
@@ -150,9 +157,20 @@ func (proxy *Proxy) handleEvents(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(""))
 }
 
-func (proxy *Proxy) handleWatches(w http.ResponseWriter, r *http.Request) {
-	//time.Sleep(2 * time.Second)
-	w.Write([]byte(""))
+func (proxy *Proxy) handlePodWatches(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("watch requested " + r.RequestURI)
+	unescapedURL, err := url.QueryUnescape(r.URL.String())
+	if err != nil {
+		panic(fmt.Sprintf("Failed to unescape URL: %v", err))
+	}
+
+	if strings.Contains(unescapedURL, "spec.nodeName!=") {
+		proxy.scheduledPodWatcher.ServeHTTP(w, r, 100*time.Second) //TODO: detect actual timeout requested
+	} else if strings.Contains(unescapedURL, "spec.nodeName=") {
+		proxy.unscheduledPodWatcher.ServeHTTP(w, r, 100*time.Second)
+	} else {
+		w.Write([]byte("")) //We don't answer other requests for now
+	}
 }
 
 func (proxy *Proxy) handleGetPods(w http.ResponseWriter, r *http.Request) {

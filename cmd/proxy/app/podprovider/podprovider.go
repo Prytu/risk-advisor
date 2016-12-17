@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/Prytu/risk-advisor/cmd/proxy/app/watcher"
 	"k8s.io/kubernetes/pkg/api/v1"
 )
 
@@ -13,6 +14,7 @@ type UnscheduledPodProvider interface {
 	AddPod(pod *v1.Pod) error
 	GetPod() (v1.Pod, error)
 	Reset() error
+	SetWatcher(*watcher.Watcher) error
 }
 
 var NoPods = errors.New("No pods to schedule.")
@@ -21,6 +23,7 @@ type SinglePodProvider struct {
 	resourceVersion int64
 	currentPod      *v1.Pod
 	mutex           *sync.Mutex
+	watcher         *watcher.Watcher
 }
 
 func New() *SinglePodProvider {
@@ -42,6 +45,7 @@ func (provider *SinglePodProvider) AddPod(pod *v1.Pod) error {
 	pod.Status.Phase = "Pending"
 
 	provider.currentPod = pod
+	provider.watcher.Add(pod)
 
 	return nil
 }
@@ -55,7 +59,6 @@ func (provider *SinglePodProvider) GetPod() (v1.Pod, error) {
 	}
 
 	pod := *provider.currentPod
-	provider.currentPod = nil
 
 	return pod, nil
 }
@@ -64,7 +67,17 @@ func (provider *SinglePodProvider) Reset() error {
 	provider.mutex.Lock()
 	defer provider.mutex.Unlock()
 
+	provider.watcher.Reset()
 	provider.currentPod = nil
+
+	return nil
+}
+
+func (provider *SinglePodProvider) SetWatcher(w *watcher.Watcher) error {
+	provider.mutex.Lock()
+	defer provider.mutex.Unlock()
+
+	provider.watcher = w
 
 	return nil
 }

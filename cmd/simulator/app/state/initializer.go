@@ -11,33 +11,42 @@ import (
 	"github.com/Prytu/risk-advisor/cmd/simulator/app/state/urls"
 )
 
-// TODO: ugly global, fix
-var baseURL string
-
-func InitState(apiserverURL string) *State {
-	baseURL = apiserverURL
-
+func InitState(apiserverURL string) *ClusterState {
 	var assignedPods v1.PodList
-	getResource(urls.AssignedNonTerminatedPods, &assignedPods)
 	var unassignedPods v1.PodList
-	getResource(urls.UnassignedNonTerminatedPods, &unassignedPods)
+	getResource(apiserverURL+urls.AssignedNonTerminatedPods, &assignedPods)
+	getResource(apiserverURL+urls.UnassignedNonTerminatedPods, &unassignedPods)
+
+	podMap := make(map[string]*v1.Pod, len(assignedPods.Items) + len(unassignedPods.Items))
+	for _, pod := range assignedPods.Items {
+		podMap[pod.Name] = &pod
+	}
+	for _, pod := range unassignedPods.Items {
+		podMap[pod.Name] = &pod
+	}
+
 	var nodeList v1.NodeList
-	getResource(urls.Nodes, &nodeList)
+	getResource(apiserverURL+urls.Nodes, &nodeList)
 
-	pvcs := getJSONResource(urls.Pvcs)
-	pvs := getJSONResource(urls.Pvs)
-	replicasets := getJSONResource(urls.Replicasets)
-	services := getJSONResource(urls.Services)
-	replicationControllers := getJSONResource(urls.ReplicationControllers)
+	nodeMap := make(map[string]*v1.Node, len(nodeList.Items))
+	for _, node := range nodeList.Items {
+		nodeMap[node.Name] = &node
+	}
 
-	return &State{
-		Pods:                   append(assignedPods.Items, unassignedPods.Items...),
-		Nodes:                  nodeList.Items,
-		Pvcs:                   pvcs,
-		Pvs:                    pvs,
-		Replicasets:            replicasets,
-		Services:               services,
-		ReplicationControllers: replicationControllers,
+	pvcs := getJSONResource(apiserverURL+urls.Pvcs)
+	pvs := getJSONResource(apiserverURL+urls.Pvs)
+	replicasets := getJSONResource(apiserverURL+urls.Replicasets)
+	services := getJSONResource(apiserverURL+urls.Services)
+	replicationControllers := getJSONResource(apiserverURL+urls.ReplicationControllers)
+
+	return &ClusterState{
+		pods:                   podMap,
+		nodes:                  nodeMap,
+		pvcs:                   pvcs,
+		pvs:                    pvs,
+		replicasets:            replicasets,
+		services:               services,
+		replicationControllers: replicationControllers,
 	}
 }
 
@@ -52,7 +61,7 @@ func getResource(url string, resource interface{}) interface{} {
 }
 
 func getJSONResource(url string) []byte {
-	req, err := http.NewRequest("GET", baseURL+url, nil)
+	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		panic(fmt.Sprintf("create request %v error: %v", url, err))
 	}

@@ -9,44 +9,51 @@ import (
 	"k8s.io/kubernetes/pkg/api/v1"
 
 	"github.com/Prytu/risk-advisor/cmd/simulator/app/state/urls"
+	"strconv"
 )
 
 func InitState(apiserverURL string) *ClusterState {
+	pvcs := getJSONResource(apiserverURL + urls.Pvcs)
+	pvs := getJSONResource(apiserverURL + urls.Pvs)
+	replicasets := getJSONResource(apiserverURL + urls.Replicasets)
+	services := getJSONResource(apiserverURL + urls.Services)
+	replicationControllers := getJSONResource(apiserverURL + urls.ReplicationControllers)
+
 	var assignedPods v1.PodList
 	var unassignedPods v1.PodList
 	getResource(apiserverURL+urls.AssignedNonTerminatedPods, &assignedPods)
 	getResource(apiserverURL+urls.UnassignedNonTerminatedPods, &unassignedPods)
 
-	podMap := make(map[string]*v1.Pod, len(assignedPods.Items) + len(unassignedPods.Items))
+	podMap := make(map[string]v1.Pod, len(assignedPods.Items)+len(unassignedPods.Items))
 	for _, pod := range assignedPods.Items {
-		podMap[pod.Name] = &pod
+		podMap[pod.Name] = pod
 	}
 	for _, pod := range unassignedPods.Items {
-		podMap[pod.Name] = &pod
+		podMap[pod.Name] = pod
 	}
 
 	var nodeList v1.NodeList
 	getResource(apiserverURL+urls.Nodes, &nodeList)
 
-	nodeMap := make(map[string]*v1.Node, len(nodeList.Items))
+	nodeMap := make(map[string]v1.Node, len(nodeList.Items))
 	for _, node := range nodeList.Items {
-		nodeMap[node.Name] = &node
+		nodeMap[node.Name] = node
 	}
 
-	pvcs := getJSONResource(apiserverURL+urls.Pvcs)
-	pvs := getJSONResource(apiserverURL+urls.Pvs)
-	replicasets := getJSONResource(apiserverURL+urls.Replicasets)
-	services := getJSONResource(apiserverURL+urls.Services)
-	replicationControllers := getJSONResource(apiserverURL+urls.ReplicationControllers)
+	resourceVersion, err := strconv.ParseInt(nodeList.ResourceVersion, 10, 64)
+	if err != nil {
+		panic(fmt.Sprintf("Error parsing resourceVersion: %v", err))
+	}
 
 	return &ClusterState{
+		resourceVersion:        resourceVersion,
 		pods:                   podMap,
 		nodes:                  nodeMap,
-		pvcs:                   pvcs,
-		pvs:                    pvs,
-		replicasets:            replicasets,
-		services:               services,
-		replicationControllers: replicationControllers,
+		Pvcs:                   pvcs,
+		Pvs:                    pvs,
+		Replicasets:            replicasets,
+		Services:               services,
+		ReplicationControllers: replicationControllers,
 	}
 }
 

@@ -15,3 +15,16 @@ type FailedSchedulingResponse struct {
 	Reason  string `json:"reason"`
 	Message string `json:"message"`
 }
+
+type SimulatorRequest struct {
+	ToCreate []*v1.Pod `json:"toCreate"`
+	ToDelete []*v1.Pod `json:"toDelete"`
+}
+
+type SchedulingResult struct {
+	Result  string
+	Message string
+}
+
+const ResultSuccess = "SUCESS"
+const ResultFailure = "FAILURE"

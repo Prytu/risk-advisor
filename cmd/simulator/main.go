@@ -3,13 +3,14 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net/http"
+
+	"k8s.io/kubernetes/pkg/api/v1"
+
 	"github.com/Prytu/risk-advisor/cmd/simulator/app/brain"
 	"github.com/Prytu/risk-advisor/cmd/simulator/app/riskadvisorHandler"
 	"github.com/Prytu/risk-advisor/cmd/simulator/app/state"
 	"github.com/Prytu/risk-advisor/pkg/flags"
-	"k8s.io/kubernetes/pkg/api/v1"
-	"log"
-	"net/http"
 )
 
 func main() {
@@ -20,13 +21,19 @@ func main() {
 
 	// get state from apiserver
 	clusterState := state.InitState(*apiserverAddress)
-	log.Print(clusterState)
 
+	// Channel for sending scheduling results between scheduler communication server and simulator
 	eventChannel := make(chan *v1.Event, 0)
-	b := brain.New(clusterState, eventChannel)
-	adviseHandler := riskadvisorhandler.NewMultiplePodAdviseHandler(b, *schedulerCommunicationPort, eventChannel)
 
-	raHandler := riskadvisorhandler.New(adviseHandler)
+	// Scheduler communication server with some logic
+	b := brain.New(clusterState, eventChannel)
+
+	// Handler for risk-advisor requests (advise, capacity)
+	adviseHandler := riskadvisorhandler.NewMultiplePodAdviseHandler(b, *schedulerCommunicationPort, eventChannel)
+	capacityHandler := riskadvisorhandler.NewCapacityHandler(b, *schedulerCommunicationPort, eventChannel)
+
+	// Server for communication between risk-advisor and simulator
+	raHandler := riskadvisorhandler.New(adviseHandler, capacityHandler)
 
 	http.ListenAndServe(fmt.Sprintf(":%s", *raCommunicationPort), raHandler)
 }

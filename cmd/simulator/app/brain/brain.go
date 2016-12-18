@@ -3,15 +3,17 @@ package brain
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/Prytu/risk-advisor/cmd/simulator/app/state"
-	"gopkg.in/gorilla/mux.v1"
 	"io/ioutil"
-	"k8s.io/kubernetes/pkg/api/v1"
-	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
+
+	"gopkg.in/gorilla/mux.v1"
+
+	"github.com/Prytu/risk-advisor/cmd/simulator/app/state"
+	"k8s.io/kubernetes/pkg/api/v1"
+	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 )
 
 // TODO: for now we use pod.Name to identify pods. Maybe use uid or something like that instead?
@@ -77,17 +79,17 @@ func (b *Brain) GetPod(w http.ResponseWriter, r *http.Request) {
 
 	podname, ok := vars["podname"]
 	if !ok {
-		panic("No podname in vars in GetPod")
+		panic("No podname in vars in GetPod.")
 	}
 
 	pod, ok := b.state.GetPod(podname)
 	if !ok {
-		panic(fmt.Sprintf("No podname with name %s in state", podname))
+		panic(fmt.Sprintf("No podname with name %s in state.", podname))
 	}
 
 	podsJSON, err := json.Marshal(&pod)
 	if err != nil {
-		panic(fmt.Sprintf("Error marshalling response: %v\n\n", err))
+		panic(fmt.Sprintf("Error marshalling response: %v.", err))
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -100,21 +102,11 @@ func (b *Brain) GetPods(w http.ResponseWriter, r *http.Request) {
 	fieldSelector := r.URL.Query().Get("fieldSelector")
 
 	if strings.Contains(fieldSelector, "spec.nodeName!=") {
-		filter = func(pod *v1.Pod) bool {
-			return pod.Spec.NodeName != "" &&
-				pod.Status.Phase != v1.PodSucceeded &&
-				pod.Status.Phase != v1.PodFailed
-		}
+		filter = state.AssignedNonTerminatedPodFilter
 	} else if strings.Contains(fieldSelector, "spec.nodeName=") {
-		filter = func(pod *v1.Pod) bool {
-			return pod.Spec.NodeName == "" &&
-				pod.Status.Phase != v1.PodSucceeded &&
-				pod.Status.Phase != v1.PodFailed
-		}
+		filter = state.UnassignedNonTerminatedPodFilter
 	} else {
-		filter = func(pod *v1.Pod) bool {
-			return true
-		}
+		filter = state.AllPodsFilter
 		log.Printf("Unexpected GET pods field selector: %s", fieldSelector)
 	}
 
@@ -135,7 +127,7 @@ func (b *Brain) GetPods(w http.ResponseWriter, r *http.Request) {
 
 	podListJSON, err := json.Marshal(&podList)
 	if err != nil {
-		panic(fmt.Sprintf("Error marshalling response: %v\n\n", err))
+		panic(fmt.Sprintf("Error marshalling response: %v.", err))
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -160,13 +152,14 @@ func (b *Brain) GetNodes(w http.ResponseWriter, r *http.Request) {
 
 	nodeListJSON, err := json.Marshal(&nodeList)
 	if err != nil {
-		panic(fmt.Sprintf("Error marshalling response: %v\n\n", err))
+		panic(fmt.Sprintf("Error marshalling response: %v.", err))
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(nodeListJSON)
 }
 
+// TODO: Make a 'generic' function for those handlers
 func (b *Brain) GetPvcs(w http.ResponseWriter, r *http.Request) {
 	pvcs := b.state.Pvcs
 
@@ -233,7 +226,7 @@ func (b *Brain) handleBinding(binding *v1.Binding) []byte {
 
 func (b *Brain) handleEvent(event *v1.Event) []byte {
 	if event.InvolvedObject.Kind != "Pod" {
-		log.Print("Non-pod event.")
+		log.Printf("Non-pod event: %v.", event)
 		return []byte("")
 	}
 

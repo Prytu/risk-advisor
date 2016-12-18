@@ -1,10 +1,11 @@
 package schedulerHandler
 
 import (
+	"net/http"
+
 	"gopkg.in/gorilla/mux.v1"
 
 	"github.com/Prytu/risk-advisor/cmd/simulator/app/brain"
-	"net/http"
 )
 
 type SchedulerHandler struct {

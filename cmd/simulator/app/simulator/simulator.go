@@ -2,23 +2,17 @@ package simulator
 
 import (
 	"fmt"
-	"github.com/Prytu/risk-advisor/cmd/simulator/app/brain"
-	"github.com/Prytu/risk-advisor/cmd/simulator/app/schedulerHandler"
+	"log"
+	"net/http"
+
 	"github.com/deckarep/golang-set"
 	"k8s.io/kubernetes/pkg/api/v1"
 	utilrand "k8s.io/kubernetes/pkg/util/rand"
-	"log"
-	"net/http"
+
+	"github.com/Prytu/risk-advisor/cmd/simulator/app/brain"
+	"github.com/Prytu/risk-advisor/cmd/simulator/app/schedulerHandler"
+	"github.com/Prytu/risk-advisor/pkg/model"
 )
-
-type SchedulingResult struct {
-	Result  string
-	Message string
-}
-
-type CapacityResult struct {
-	Capacity int64
-}
 
 type Simulator struct {
 	brain            *brain.Brain
@@ -26,7 +20,7 @@ type Simulator struct {
 	eventChannel     <-chan *v1.Event
 
 	// Map pod.Name to the result of scheduling attempt of that pod
-	RequestPods map[string]*SchedulingResult
+	RequestPods map[string]*model.SchedulingResult
 
 	// Set of pod.Name of pods from user's request that has not been processed yet
 	PodsLeftToProcess mapset.Set
@@ -40,8 +34,8 @@ func New(brain *brain.Brain, schedulerCommunicationServer *schedulerHandler.Sche
 	}
 }
 
-func (s *Simulator) RunMultiplePodSimulation(podsToCreate, toDelete []*v1.Pod) []*SchedulingResult {
-	requestPods := make(map[string]*SchedulingResult, len(podsToCreate))
+func (s *Simulator) RunMultiplePodSimulation(podsToCreate, toDelete []*v1.Pod) []*model.SchedulingResult {
+	requestPods := make(map[string]*model.SchedulingResult, len(podsToCreate))
 	podsToProcess := mapset.NewSet()
 
 	// Apply state mutations
@@ -67,8 +61,7 @@ func (s *Simulator) RunMultiplePodSimulation(podsToCreate, toDelete []*v1.Pod) [
 			log.Printf(`
 			Received pod scheduling event of a pod unrelated to request:
 			podName: %s
-			schedulingResult: %v
-			`, podName, schedulingResult)
+			schedulingResult: %v`, podName, schedulingResult)
 		}
 
 		if podsToProcess.Cardinality() == 0 {
@@ -76,7 +69,7 @@ func (s *Simulator) RunMultiplePodSimulation(podsToCreate, toDelete []*v1.Pod) [
 		}
 	}
 
-	results := make([]*SchedulingResult, len(requestPods))
+	results := make([]*model.SchedulingResult, len(requestPods))
 	i := 0
 	for _, result := range requestPods {
 		results[i] = result
@@ -86,18 +79,7 @@ func (s *Simulator) RunMultiplePodSimulation(podsToCreate, toDelete []*v1.Pod) [
 	return results
 }
 
-func (s *Simulator) RunSinglePodSimulation(podToSimulate *v1.Pod) *SchedulingResult {
-	s.brain.AddPodToState(*podToSimulate)
-
-	// Run scheduler communication server
-	go http.ListenAndServe(fmt.Sprintf(":%s", s.schedulerHandler.Port), s.schedulerHandler)
-
-	event := <-s.eventChannel
-
-	return schedulingResultFromEvent(event)
-}
-
-func (s *Simulator) RunCapacitySimulation(podToSimulate *v1.Pod) *CapacityResult {
+func (s *Simulator) RunCapacitySimulation(podToSimulate *v1.Pod) *model.CapacityResult {
 	capacity := int64(0)
 
 	for {
@@ -113,16 +95,18 @@ func (s *Simulator) RunCapacitySimulation(podToSimulate *v1.Pod) *CapacityResult
 		}
 	}
 
-	return &CapacityResult{
+	return &model.CapacityResult{
 		Capacity: capacity,
 	}
 }
 
-func schedulingResultFromEvent(event *v1.Event) *SchedulingResult {
+func schedulingResultFromEvent(event *v1.Event) *model.SchedulingResult {
 	result := event.Reason
 	message := event.Message
+	podName := event.InvolvedObject.Name
 
-	return &SchedulingResult{
+	return &model.SchedulingResult{
+		PodName: podName,
 		Result:  result,
 		Message: message,
 	}

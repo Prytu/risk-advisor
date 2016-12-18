@@ -2,12 +2,12 @@ package brain
 
 import (
 	"fmt"
+	"strconv"
 
 	"k8s.io/kubernetes/pkg/api/v1"
 	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	utilrand "k8s.io/kubernetes/pkg/util/rand"
 	"k8s.io/kubernetes/pkg/util/uuid"
-	"strconv"
 )
 
 const maxNameLength = 58

@@ -7,8 +7,6 @@ import (
 	"k8s.io/kubernetes/pkg/api/v1"
 )
 
-type PodFilter func(pod *v1.Pod) bool
-
 type ClusterState struct {
 	sync.RWMutex
 	resourceVersion int64
@@ -26,6 +24,7 @@ func (s *ClusterState) AddPod(pod v1.Pod) {
 	s.Lock()
 	defer s.Unlock()
 
+	s.resourceVersion++
 	s.pods[pod.Name] = pod
 }
 
@@ -35,20 +34,6 @@ func (s *ClusterState) GetResourceVersion() int64 {
 
 	return s.resourceVersion
 }
-
-/*func (s *ClusterState) GetPods() []v1.Pod {
-	s.RLock()
-	defer s.RUnlock()
-
-	pods := make([]v1.Pod, len(s.pods))
-	i := 0
-	for _, v := range s.pods {
-		pods[i] = v
-		i++
-	}
-
-	return pods
-}*/
 
 func (s *ClusterState) GetPods(filter PodFilter) []v1.Pod {
 	s.RLock()
@@ -93,6 +78,8 @@ func (s *ClusterState) GetPod(name string) (v1.Pod, bool) {
 func (s *ClusterState) UpdatePod(podName string, newPodState v1.Pod) {
 	s.Lock()
 	defer s.Unlock()
+
+	s.resourceVersion++
 
 	if _, ok := s.pods[podName]; !ok {
 		// TODO: Find out if such situation can happen in our simulation. If yes - fix this one

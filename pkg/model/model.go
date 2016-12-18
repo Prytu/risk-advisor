@@ -22,9 +22,11 @@ type SimulatorRequest struct {
 }
 
 type SchedulingResult struct {
-	Result  string
-	Message string
+	PodName string `json:"podName"`
+	Result  string `json:"result"`
+	Message string `json:"message"`
 }
 
-const ResultSuccess = "SUCESS"
-const ResultFailure = "FAILURE"
+type CapacityResult struct {
+	Capacity int64
+}

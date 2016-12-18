@@ -23,7 +23,7 @@ func New(b *brain.Brain, port string) *SchedulerHandler {
 	apiv1.HandleFunc("/nodes", b.GetNodes).Methods("GET")
 	apiv1.HandleFunc("/pods", b.GetPods).Methods("GET")
 	apiv1.HandleFunc("/persistentvolumeclaims", b.GetPvcs).Methods("GET")
-	apiv1.HandleFunc("/persistentvolumes", b.GetPvcs).Methods("GET")
+	apiv1.HandleFunc("/persistentvolumes", b.GetPvs).Methods("GET")
 	apiv1.HandleFunc("/services", b.GetServices).Methods("GET")
 	apiv1.HandleFunc("/replicationcontrollers", b.GetServices).Methods("GET")
 

@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"gopkg.in/gorilla/mux.v1"
 
@@ -23,12 +25,20 @@ type Brain struct {
 
 	// Channel that will send scheduling events to Simulator
 	eventChannel chan<- *v1.Event
+
+	nodesMutex            *sync.Mutex
+	isNodesRequestHandled bool
 }
 
 func New(state *state.ClusterState, eventChannel chan<- *v1.Event) *Brain {
+	mutex := &sync.Mutex{}
+	mutex.Lock()
+
 	return &Brain{
-		state:        state,
-		eventChannel: eventChannel,
+		state:                 state,
+		eventChannel:          eventChannel,
+		nodesMutex:            mutex,
+		isNodesRequestHandled: false,
 	}
 }
 
@@ -130,6 +140,12 @@ func (b *Brain) GetPods(w http.ResponseWriter, r *http.Request) {
 		panic(fmt.Sprintf("Error marshalling response: %v.", err))
 	}
 
+	b.nodesMutex.Lock()
+	b.nodesMutex.Unlock()
+	// Temporary solution: sleep 1 second to make sure response to nodes request is delivered to client
+	// TODO: Fix
+	time.Sleep(time.Second)
+
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(podListJSON)
 }
@@ -153,6 +169,11 @@ func (b *Brain) GetNodes(w http.ResponseWriter, r *http.Request) {
 	nodeListJSON, err := json.Marshal(&nodeList)
 	if err != nil {
 		panic(fmt.Sprintf("Error marshalling response: %v.", err))
+	}
+
+	if !b.isNodesRequestHandled {
+		b.isNodesRequestHandled = true
+		b.nodesMutex.Unlock()
 	}
 
 	w.Header().Set("Content-Type", "application/json")

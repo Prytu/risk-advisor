@@ -8,12 +8,12 @@ import (
 	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	utilrand "k8s.io/kubernetes/pkg/util/rand"
 	"k8s.io/kubernetes/pkg/util/uuid"
+
+	"github.com/Prytu/risk-advisor/pkg/model"
 )
 
-const maxNameLength = 58
-
 func updateNewPodData(pod *v1.Pod, resourceVersion int64) {
-	fillNewPodData(pod, resourceVersion, utilrand.String(maxNameLength), metav1.Now())
+	fillNewPodData(pod, resourceVersion, utilrand.String(model.MaxNameLength), metav1.Now())
 }
 
 func fillNewPodData(pod *v1.Pod, resourceVersion int64, podName string, creationTimestamp metav1.Time) {

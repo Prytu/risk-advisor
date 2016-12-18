@@ -16,6 +16,8 @@ type FailedSchedulingResponse struct {
 	Message string `json:"message"`
 }
 
+const MaxNameLength = 58
+
 type SimulatorRequest struct {
 	ToCreate []*v1.Pod `json:"toCreate" binding:"required"`
 	ToDelete []*v1.Pod `json:"toDelete"`

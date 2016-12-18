@@ -40,6 +40,9 @@ func (s *Simulator) RunMultiplePodSimulation(podsToCreate, toDelete []*v1.Pod) [
 
 	// Apply state mutations
 	for _, pod := range podsToCreate {
+		if pod.Name == "" {
+			pod.Name = utilrand.String(model.MaxNameLength)
+		}
 		requestPods[pod.Name] = nil
 		podsToProcess.Add(pod.Name)
 		s.brain.AddPodToState(*pod)
@@ -83,7 +86,7 @@ func (s *Simulator) RunCapacitySimulation(podToSimulate *v1.Pod) *model.Capacity
 	capacity := int64(0)
 
 	for {
-		podToSimulate.Name = utilrand.String(20)
+		podToSimulate.Name = utilrand.String(model.MaxNameLength)
 		s.brain.AddPodToState(*podToSimulate)
 
 		event := <-s.eventChannel

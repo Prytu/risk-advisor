@@ -7,6 +7,7 @@ import (
 	"github.com/Prytu/risk-advisor/cmd/simulator/app/riskadvisorHandler"
 	"github.com/Prytu/risk-advisor/cmd/simulator/app/state"
 	"github.com/Prytu/risk-advisor/pkg/flags"
+	"k8s.io/kubernetes/pkg/api/v1"
 	"log"
 	"net/http"
 )
@@ -21,8 +22,9 @@ func main() {
 	clusterState := state.InitState(*apiserverAddress)
 	log.Print(clusterState)
 
-	b := brain.New(clusterState)
-	adviseHandler := riskadvisorhandler.NewAdviseHandler(b, *schedulerCommunicationPort)
+	eventChannel := make(chan *v1.Event, 0)
+	b := brain.New(clusterState, eventChannel)
+	adviseHandler := riskadvisorhandler.NewMultiplePodAdviseHandler(b, *schedulerCommunicationPort, eventChannel)
 
 	raHandler := riskadvisorhandler.New(adviseHandler)
 

@@ -23,9 +23,10 @@ type Brain struct {
 	eventChannel chan<- *v1.Event
 }
 
-func New(state *state.ClusterState) *Brain {
+func New(state *state.ClusterState, eventChannel chan<- *v1.Event) *Brain {
 	return &Brain{
-		state: state,
+		state:        state,
+		eventChannel: eventChannel,
 	}
 }
 
@@ -111,7 +112,10 @@ func (b *Brain) GetPods(w http.ResponseWriter, r *http.Request) {
 				pod.Status.Phase != v1.PodFailed
 		}
 	} else {
-		panic(fmt.Sprintf("Unexpected GET pods field selector: %s", fieldSelector))
+		filter = func(pod *v1.Pod) bool {
+			return true
+		}
+		log.Printf("Unexpected GET pods field selector: %s", fieldSelector)
 	}
 
 	pods = b.state.GetPods(filter)
@@ -199,7 +203,6 @@ func (b *Brain) GetReplicationControllers(w http.ResponseWriter, r *http.Request
 }
 
 func (b *Brain) Watchers(w http.ResponseWriter, r *http.Request) {
-	log.Print("Watch handler")
 	w.Write([]byte(""))
 }
 

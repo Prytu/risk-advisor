@@ -6,30 +6,42 @@ import (
 	"fmt"
 	"github.com/Prytu/risk-advisor/cmd/simulator/app/brain"
 	"github.com/Prytu/risk-advisor/cmd/simulator/app/schedulerHandler"
+	"github.com/Prytu/risk-advisor/cmd/simulator/app/simulator"
 	"github.com/Prytu/risk-advisor/pkg/model"
 	"io"
 	"io/ioutil"
+	"k8s.io/kubernetes/pkg/api/v1"
 	"log"
 	"net/http"
 )
 
 type HTTPHandlerFunc func(w http.ResponseWriter, r *http.Request)
 
-func NewAdviseHandler(b *brain.Brain, schedulerCommunicationPort string) HTTPHandlerFunc {
+func NewMultiplePodAdviseHandler(b *brain.Brain, schedulerCommunicationPort string, eventChannel chan *v1.Event) HTTPHandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		//clusterMutations, err := parseAdviseRequestBody(r.Body)
-		//if err != nil {
-		//	http.Error(w, err.Error(), http.StatusBadRequest)
-		//	return
-		//}
+		clusterMutations, err := parseAdviseRequestBody(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 
 		log.Printf("Starting scheduler server on port %s\n", schedulerCommunicationPort)
+
 		schedHandler := schedulerHandler.New(b, schedulerCommunicationPort)
 		go http.ListenAndServe(":"+schedulerCommunicationPort, schedHandler)
-		//s := simulator.New(b, schedulerHandler)
 
-		//response := s.RunMultiplePodSimulation(clusterMutations.ToCreate, clusterMutations.ToDelete)
+		s := simulator.New(b, schedHandler, eventChannel)
+
+		result := s.RunMultiplePodSimulation(clusterMutations.ToCreate, clusterMutations.ToDelete)
+		resultJSON, err := json.MarshalIndent(result, "", "  ")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(resultJSON)
 	}
 }
 

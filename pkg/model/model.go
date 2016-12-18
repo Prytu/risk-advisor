@@ -17,7 +17,7 @@ type FailedSchedulingResponse struct {
 }
 
 type SimulatorRequest struct {
-	ToCreate []*v1.Pod `json:"toCreate"`
+	ToCreate []*v1.Pod `json:"toCreate" binding:"required"`
 	ToDelete []*v1.Pod `json:"toDelete"`
 }
 

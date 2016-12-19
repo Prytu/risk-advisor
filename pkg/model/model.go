@@ -15,3 +15,20 @@ type FailedSchedulingResponse struct {
 	Reason  string `json:"reason"`
 	Message string `json:"message"`
 }
+
+const MaxNameLength = 58
+
+type SimulatorRequest struct {
+	ToCreate []*v1.Pod `json:"toCreate" binding:"required"`
+	ToDelete []*v1.Pod `json:"toDelete"`
+}
+
+type SchedulingResult struct {
+	PodName string `json:"podName"`
+	Result  string `json:"result"`
+	Message string `json:"message"`
+}
+
+type CapacityResult struct {
+	Capacity int64
+}

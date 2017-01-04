@@ -3,7 +3,7 @@ package model
 import "k8s.io/kubernetes/pkg/api/v1"
 
 type AdviceRequest struct {
-	Pod *v1.Pod `json:"pod"`
+	Pods *[]v1.Pod `json:"pods"`
 }
 
 type ProxyResponse struct {

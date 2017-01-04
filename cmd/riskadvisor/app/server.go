@@ -9,7 +9,14 @@ import (
 	"github.com/emicklei/go-restful"
 
 	"github.com/Prytu/risk-advisor/pkg/model"
-	"k8s.io/kubernetes/pkg/api/v1"
+	kubeapi "k8s.io/kubernetes/pkg/api/v1"
+
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/kubernetes"
+	clientapi "k8s.io/client-go/pkg/api/v1"
+	metav1 "k8s.io/client-go/pkg/apis/meta/v1"
+	"fmt"
+	"time"
 )
 
 type AdviceService struct {
@@ -24,7 +31,7 @@ func New(proxyUrl string) http.Handler {
 }
 
 func (as *AdviceService) sendAdviceRequest(request *restful.Request, response *restful.Response) {
-	var pod v1.Pod
+	var pods []*kubeapi.Pod
 	//err := request.ReadEntity(pod)
 
 	/* narazie pazdzierz */
@@ -33,21 +40,69 @@ func (as *AdviceService) sendAdviceRequest(request *restful.Request, response *r
 		response.WriteError(http.StatusInternalServerError, err)
 		return
 	}
-	err = json.Unmarshal(body, &pod)
+	err = json.Unmarshal(body, &pods)
 	if err != nil {
 		response.WriteError(http.StatusInternalServerError, err)
 		return
 	}
 	/* koniec pazdzierza */
 
-	ar := model.AdviceRequest{&pod}
-	arJSON, err := json.Marshal(ar)
+	sr := model.SimulatorRequest{ToCreate: pods}
+	srJSON, err := json.Marshal(sr)
 	if err != nil {
 		response.WriteError(http.StatusInternalServerError, err)
 		return
 	}
 
-	resp, err := http.Post(as.proxyUrl+"/advise", "application/json", bytes.NewReader(arJSON))
+	var simulatorPod clientapi.Pod
+	simulatorPod = clientapi.Pod{
+		ObjectMeta: clientapi.ObjectMeta{
+			Name: "simulator",
+		},
+		Spec: clientapi.PodSpec{
+			Containers: []clientapi.Container{clientapi.Container{
+				Name: "simulator",
+				Image: "pposkrobko/simulator",
+				Ports: []clientapi.ContainerPort{clientapi.ContainerPort{ContainerPort: 9997},},
+			},},
+		},
+	}
+
+	// creates the in-cluster config
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		panic(err.Error())
+	}
+
+	// creates the clientset
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	_, err = clientset.CoreV1().Pods("default").Create(&simulatorPod)
+	if err != nil {
+		fmt.Printf(err.Error())
+	}
+
+	newPod, err := clientset.CoreV1().Pods("default").Get("simulator", metav1.GetOptions{})
+	for err != nil {
+		time.Sleep(time.Second)
+		newPod, err = clientset.CoreV1().Pods("default").Get("simulator", metav1.GetOptions{})
+	}
+
+	var podIp = newPod.Status.PodIP
+	resp, err := http.Post(
+		"http://" + podIp + ":9998/advise",
+		"application/json",
+		bytes.NewReader(srJSON),
+	)
+	for err != nil {
+		time.Sleep(time.Second)
+		resp, err = http.Get("http://" + podIp + ":9998/advise")
+	}
+
+	resp, err = http.Post(as.proxyUrl+"/advise", "application/json", bytes.NewReader(srJSON))
 	if err != nil {
 		response.WriteError(http.StatusNotFound, err)
 		return
@@ -59,18 +114,14 @@ func (as *AdviceService) sendAdviceRequest(request *restful.Request, response *r
 		return
 	}
 
-	var proxyResponse model.ProxyResponse
-	err = json.Unmarshal(responseJSON, &proxyResponse)
+	var simulatorResponse []model.SchedulingResult
+	err = json.Unmarshal(responseJSON, &simulatorResponse)
 	if err != nil {
 		response.WriteError(http.StatusExpectationFailed, err)
 		return
 	}
 
-	adviseResponse := AdviceResponse{
-		Status: proxyResponse.Status,
-		Result: proxyResponse.Message,
-	}
-	response.WriteEntity(adviseResponse)
+	response.WriteEntity(simulatorResponse)
 }
 
 func (as *AdviceService) Register(container *restful.Container) {
@@ -82,7 +133,7 @@ func (as *AdviceService) Register(container *restful.Container) {
 	ws.Route(ws.POST("").To(as.sendAdviceRequest).
 		// Documentation
 		Doc("Post a request for advice").
-		Reads(v1.Pod{}).
+		Reads([]kubeapi.Pod{}).
 		Returns(200, "OK", AdviceResponse{}))
 
 	container.Add(ws)

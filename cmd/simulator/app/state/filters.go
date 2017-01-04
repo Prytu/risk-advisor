@@ -1,6 +1,6 @@
 package state
 
-import "k8s.io/kubernetes/pkg/api/v1"
+import "k8s.io/client-go/1.5/pkg/api/v1"
 
 type PodFilter func(pod *v1.Pod) bool
 

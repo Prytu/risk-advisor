@@ -11,13 +11,13 @@ import (
 )
 
 func main() {
-	proxyAddress := flag.String("proxy", defaults.ProxyAddress, "Address on which proxy runs")
+	simulatorPort := flag.String("simulator", defaults.SimulatorPort, "Address on which simulator pod listens for requests")
 	port := flag.String("port", defaults.RiskAdvisorUserPort, "Port on which risk-advisors listens for users requests")
 	flag.Parse()
 
-	riskAdvisor := app.New(*proxyAddress)
+	riskAdvisor := app.New(*simulatorPort)
 
-	log.Printf("Starting risk-advisor with:\n\t- port: %v\n\t- proxy URL: %v", *port, *proxyAddress)
+	log.Printf("Starting risk-advisor with:\n\t- port: %v\n\t- simulator port: %v", *port, *simulatorPort)
 
 	http.ListenAndServe(":"+*port, riskAdvisor)
 }

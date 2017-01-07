@@ -17,7 +17,7 @@ func main() {
 
 	riskAdvisor := app.New(*proxyAddress)
 
-	log.Printf("Starting risk-advisor with:\n\t- port: %v\n\t- proxy URL: %v", *port, *proxyAddress)
+	log.Printf("NWWWWWEW Starting risk-advisor with:\n\t- port: %v\n\t- proxy URL: %v", *port, *proxyAddress)
 
 	http.ListenAndServe(":"+*port, riskAdvisor)
 }

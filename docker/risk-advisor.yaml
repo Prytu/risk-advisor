@@ -8,18 +8,6 @@ metadata:
 spec:
   containers: [
     {
-      name: proxy,
-      image: pposkrobko/proxy,
-      ports: [
-        { 
-          containerPort: 9999 
-        },
-        {
-          containerPort: 9998
-        }
-      ]
-    },
-    {
       name: riskadvisor,
       image: pposkrobko/riskadvisor,
       ports: [

@@ -24,12 +24,12 @@ func CustomBuildHandlerChain(apiHandler http.Handler, c *genericapiserver.Config
 }
 
 func main() {
-	var config = genericapiserver.NewConfig()
+	config := genericapiserver.NewConfig()
 
-	var publicAddress = net.IPv4(127, 0, 0, 1)
+	publicAddress := net.IPv4(127, 0, 0, 1)
 	config.PublicAddress = publicAddress
 
-	var insecureServingInfo = &genericapiserver.ServingInfo {
+	insecureServingInfo := &genericapiserver.ServingInfo {
 		BindAddress: "127.0.0.1:6442",
 		BindNetwork: "tcp",
 	}
@@ -37,7 +37,7 @@ func main() {
 
 	config.BuildHandlerChainsFunc = CustomBuildHandlerChain
 
-	var completedConfig = config.Complete()
+	completedConfig := config.Complete()
 
 	genericServer, err := completedConfig.New()
 	if (err != nil) {

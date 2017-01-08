@@ -2,20 +2,6 @@ package model
 
 import "k8s.io/client-go/pkg/api/v1"
 
-type AdviceRequest struct {
-	Pods *[]v1.Pod `json:"pods"`
-}
-
-type ProxyResponse struct {
-	Status  string `json:"status"`
-	Message string `json:"message"`
-}
-
-type FailedSchedulingResponse struct {
-	Reason  string `json:"reason"`
-	Message string `json:"message"`
-}
-
 const MaxNameLength = 58
 
 type SimulatorRequest struct {

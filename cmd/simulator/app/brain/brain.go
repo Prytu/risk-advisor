@@ -14,8 +14,8 @@ import (
 	"gopkg.in/gorilla/mux.v1"
 
 	"github.com/Prytu/risk-advisor/cmd/simulator/app/state"
-	"k8s.io/kubernetes/pkg/api/v1"
-	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
+	"k8s.io/client-go/pkg/api/v1"
+	metav1 "k8s.io/client-go/pkg/apis/meta/v1"
 )
 
 // TODO: for now we use pod.Name to identify pods. Maybe use uid or something like that instead?

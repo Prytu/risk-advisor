@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"k8s.io/kubernetes/pkg/apis/meta/v1"
+	"k8s.io/client-go/pkg/apis/meta/v1"
 )
 
 // TODO: Generate real binding response

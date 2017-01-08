@@ -4,9 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"io/ioutil"
-	"net/http"
-
 	"log"
+	"net/http"
 
 	"github.com/emicklei/go-restful"
 
@@ -16,138 +15,192 @@ import (
 	"k8s.io/client-go/pkg/api/v1"
 	metav1 "k8s.io/client-go/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
-	"fmt"
 	"time"
 )
 
+var (
+	simulatorPod = v1.Pod{
+		ObjectMeta: v1.ObjectMeta{
+			Name: "simulator",
+		},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{{
+				Name:  "simulator",
+				Image: "pposkrobko/simulator",
+				Ports: []v1.ContainerPort{
+					{ContainerPort: 9998},
+					{ContainerPort: 9999},
+				},
+			},
+				{
+					Name:  "kubescheduler",
+					Image: "gcr.io/google_containers/kube-scheduler:v1.4.6",
+					Command: []string{"/bin/sh", "-c",
+						"/usr/local/bin/kube-scheduler --master=127.0.0.1:9999 --leader-elect=false --kube-api-content-type application/json"},
+				},
+				{
+					Name:            "kubectl",
+					Image:           "gcr.io/google_containers/kubectl:v0.18.0-120-gaeb4ac55ad12b1-dirty",
+					ImagePullPolicy: "Always",
+					Args:            []string{"proxy", "-p", "8080"},
+				},
+			},
+		},
+	}
+)
+
 type AdviceService struct {
-	proxyUrl string
+	simulatorPort string
 }
 
-func New(proxyUrl string) http.Handler {
-	as := AdviceService{proxyUrl}
+func New(simulatorPort string) http.Handler {
+	as := AdviceService{simulatorPort}
 	wsContainer := restful.NewContainer()
 	as.Register(wsContainer)
 	return wsContainer
 }
 
 func (as *AdviceService) sendAdviceRequest(request *restful.Request, response *restful.Response) {
-	log.Println("zaczynamy obsluge")
+
+	clientset, err := as.getKubernetesClientset()
+	if err != nil {
+		response.WriteError(http.StatusInternalServerError, err)
+		return
+	}
+
+	log.Printf("Creating simulator pod")
+	podIp, err := as.createSimulatorPod(clientset)
+	if err != nil {
+		response.WriteError(http.StatusInternalServerError, err)
+		return
+	}
+
+	log.Printf("Getting pods from user request")
+	pods, err := as.getPodsFromRequest(request)
+	if err != nil {
+		response.WriteError(http.StatusInternalServerError, err)
+		return
+	}
+
+	log.Printf("Creating simulator request")
+	simulatorRequestJSON, err := as.getSimulatorRequestJSON(pods)
+	if err != nil {
+		response.WriteError(http.StatusInternalServerError, err)
+		return
+	}
+
+	log.Printf("Waiting until simulator is ready")
+	as.waitUntilSimulatorReady(clientset, podIp)
+
+	log.Printf("Sending simulator request")
+	simulatorResponse, err := as.sendSimulatorRequest(podIp, simulatorRequestJSON)
+	if err != nil {
+		response.WriteError(http.StatusInternalServerError, err)
+		return
+	}
+
+	log.Printf("Response received")
+	response.WriteEntity(simulatorResponse)
+
+	log.Printf("Deleting simulator pod")
+	as.deleteSimulatorPod(clientset)
+}
+
+func (as *AdviceService) getPodsFromRequest(request *restful.Request) ([]*v1.Pod, error) {
 
 	var pods []*v1.Pod
-	//err := request.ReadEntity(pod)
 
 	/* narazie pazdzierz */
 	body, err := ioutil.ReadAll(request.Request.Body)
 	if err != nil {
-		response.WriteError(http.StatusInternalServerError, err)
-		return
+		return nil, err
 	}
 
-	log.Println("wczytane do body")
 	err = json.Unmarshal(body, &pods)
 	if err != nil {
-		response.WriteError(http.StatusInternalServerError, err)
-		return
+		return nil, err
 	}
-	/* koniec pazdzierza */
-	log.Println("zjosonowane")
+
+	return pods, nil
+}
+
+func (as *AdviceService) getSimulatorRequestJSON(pods []*v1.Pod) ([]byte, error) {
+
 	sr := model.SimulatorRequest{ToCreate: pods}
-log.Println("simulator request")
+
 	srJSON, err := json.Marshal(sr)
 	if err != nil {
-		response.WriteError(http.StatusInternalServerError, err)
-		return
-	}
-log.Println("simulator request json")
-	//var podJson = "{\"apiVersion\":\"v1\",\"kind\":\"Pod\",\"metadata\":{\"name\":\"simulator\"},\"spec\":{\"containers\":[{\"name\":\"simulator\",\"image\":\"pposkrobko/simulator\"}]}}"
-
-	var simulatorPod v1.Pod
-	simulatorPod = v1.Pod{
-		ObjectMeta: v1.ObjectMeta{
-			Name: "simulator",
-		},
-		Spec: v1.PodSpec{
-			Containers: []v1.Container{v1.Container{
-					Name: "simulator",
-					Image: "pposkrobko/simulator",
-					Ports: []v1.ContainerPort{v1.ContainerPort{ContainerPort: 9998},v1.ContainerPort{ContainerPort: 9999},},
-				},
-				v1.Container{
-						Name: "kubescheduler",
-						Image: "gcr.io/google_containers/kube-scheduler:v1.4.6",
-						Command: []string{"/bin/sh", "-c",  "/usr/local/bin/kube-scheduler --master=127.0.0.1:9999 --leader-elect=false --kube-api-content-type application/json"},
-				},
-				v1.Container{
-						Name: "kubectl",
-						Image: "gcr.io/google_containers/kubectl:v0.18.0-120-gaeb4ac55ad12b1-dirty",
-						ImagePullPolicy: "Always",
-						Args: []string{"proxy", "-p", "8080"},
-				},
-			},
-		},
+		return nil, err
 	}
 
-	// uses the current context in kubeconfig
+	return srJSON, nil
+}
+
+func (as *AdviceService) getKubernetesClientset() (*kubernetes.Clientset, error) {
+
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		panic(err.Error())
+		return nil, err
 	}
 
-log.Println("mamy in cluster config")
-
-	// creates the clientset
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		panic(err.Error())
+		return nil, err
 	}
-log.Printf("mamy clientset")
-	_, err = clientset.CoreV1().Pods("default").Create(&simulatorPod)
+
+	return clientset, nil
+}
+
+func (as *AdviceService) createSimulatorPod(clientset *kubernetes.Clientset) (string, error) {
+	_, err := clientset.CoreV1().Pods("default").Create(&simulatorPod)
 	if err != nil {
-		fmt.Printf(err.Error())
+		return "", err
 	}
-log.Printf("created pod")
+
 	newPod, err := clientset.CoreV1().Pods("default").Get("simulator", metav1.GetOptions{})
-	for err != nil {
+	for newPod.Status.PodIP == "" {
 		time.Sleep(time.Second)
 		newPod, err = clientset.CoreV1().Pods("default").Get("simulator", metav1.GetOptions{})
 	}
-log.Printf("got ip")
-	var podIp = newPod.Status.PodIP
-	resp, err := http.Get(
-		"http://" + podIp + ":9998/advise"
-	)
+	return newPod.Status.PodIP, nil
+}
+
+func (as *AdviceService) getSimulatorAdviseUrl(podIp string) string {
+	return "http://" + podIp + ":" + as.simulatorPort + "/advise"
+}
+
+func (as *AdviceService) waitUntilSimulatorReady(clientset *kubernetes.Clientset, podIp string) {
+	// TODO add timeout
+	_, err := http.Get(as.getSimulatorAdviseUrl(podIp))
 	for err != nil {
-fmt.Println(err)
-newPod, err = clientset.CoreV1().Pods("default").Get("simulator", metav1.GetOptions{})
-podIp = newPod.Status.PodIP
 		time.Sleep(time.Second)
-		resp, err := http.Get(
-			"http://" + podIp + ":9998/advise"
-		)
+		_, err = http.Get(as.getSimulatorAdviseUrl(podIp))
 	}
-log.Printf("asking simulator")
-	resp, err = http.Post(as.proxyUrl+"/advise", "application/json", bytes.NewReader(srJSON))
+}
+
+func (as *AdviceService) sendSimulatorRequest(podIp string, simulatorRequestJSON []byte) ([]model.SchedulingResult, error) {
+	resp, err := http.Post(as.getSimulatorAdviseUrl(podIp), "application/json", bytes.NewReader(simulatorRequestJSON))
 	for err != nil {
-		fmt.Println(err)
-		resp, err = http.Post(as.proxyUrl+"/advise", "application/json", bytes.NewReader(srJSON))
+		resp, err = http.Post(as.getSimulatorAdviseUrl(podIp), "application/json", bytes.NewReader(simulatorRequestJSON))
 	}
-log.Printf("asked simulator successfully")
+
 	responseJSON, err := ioutil.ReadAll(resp.Body)
-log.Printf(string(responseJSON))
 	if err != nil {
-		response.WriteError(http.StatusInternalServerError, err)
-		return
+		return nil, err
 	}
-log.Printf("got response from simulator")
+
 	var simulatorResponse []model.SchedulingResult
 	err = json.Unmarshal(responseJSON, &simulatorResponse)
 	if err != nil {
-		response.WriteError(http.StatusExpectationFailed, err)
-		return
+		return nil, err
 	}
-log.Printf("unmarhsalled response")
-	response.WriteEntity(simulatorResponse)
+
+	return simulatorResponse, nil
+}
+
+func (as *AdviceService) deleteSimulatorPod(clientset *kubernetes.Clientset) {
+	// TODO error handling
+	_ = clientset.CoreV1().Pods("default").Delete("simulator", &v1.DeleteOptions{})
 }
 
 func (as *AdviceService) Register(container *restful.Container) {
@@ -160,7 +213,7 @@ func (as *AdviceService) Register(container *restful.Container) {
 		// Documentation
 		Doc("Post a request for advice").
 		Reads([]v1.Pod{}).
-		Returns(200, "OK", AdviceResponse{}))
+		Returns(200, "OK", []model.SchedulingResult{}))
 
 	container.Add(ws)
 }

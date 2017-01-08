@@ -1,9 +1,2 @@
-FROM golang
-
-ADD $GOPATH/src/github.com/Prytu/risk-advisor ./go/src/github.com/Prytu/risk-advisor/
-
-RUN go install github.com/Prytu/risk-advisor/cmd/riskadvisor
-
-ENTRYPOINT /go/bin/riskadvisor
-
+FROM golang:onbuild
 EXPOSE 9997 

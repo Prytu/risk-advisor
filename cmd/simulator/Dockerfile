@@ -1,2 +1,2 @@
 FROM golang:onbuild
-EXPOSE 9998 
+EXPOSE 9998 9999 

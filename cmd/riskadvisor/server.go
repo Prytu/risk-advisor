@@ -1,4 +1,4 @@
-package app
+package main
 
 import (
 	"bytes"
@@ -10,7 +10,6 @@ import (
 
 	"github.com/emicklei/go-restful"
 
-	"github.com/Prytu/risk-advisor/pkg/model"
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/api/v1"
@@ -22,6 +21,17 @@ import (
 
 type AdviceService struct {
 	proxyUrl string
+}
+
+type SimulatorRequest struct {
+	ToCreate []*v1.Pod `json:"toCreate" binding:"required"`
+	ToDelete []*v1.Pod `json:"toDelete"`
+}
+
+type SchedulingResult struct {
+	PodName string `json:"podName"`
+	Result  string `json:"result"`
+	Message string `json:"message"`
 }
 
 func New(proxyUrl string) http.Handler {
@@ -52,7 +62,7 @@ func (as *AdviceService) sendAdviceRequest(request *restful.Request, response *r
 	}
 	/* koniec pazdzierza */
 	log.Println("zjosonowane")
-	sr := model.SimulatorRequest{ToCreate: pods}
+	sr := SimulatorRequest{ToCreate: pods}
 log.Println("simulator request")
 	srJSON, err := json.Marshal(sr)
 	if err != nil {
@@ -114,23 +124,19 @@ log.Printf("created pod")
 	}
 log.Printf("got ip")
 	var podIp = newPod.Status.PodIP
-	resp, err := http.Get(
-		"http://" + podIp + ":9998/advise"
-	)
+	resp, err := http.Get("http://" + podIp + ":9998/advise")
 	for err != nil {
 fmt.Println(err)
 newPod, err = clientset.CoreV1().Pods("default").Get("simulator", metav1.GetOptions{})
 podIp = newPod.Status.PodIP
 		time.Sleep(time.Second)
-		resp, err := http.Get(
-			"http://" + podIp + ":9998/advise"
-		)
+		resp, err = http.Get("http://" + podIp + ":9998/advise")
 	}
 log.Printf("asking simulator")
-	resp, err = http.Post(as.proxyUrl+"/advise", "application/json", bytes.NewReader(srJSON))
+	resp, err = http.Post("http://" + podIp + ":9998/advise", "application/json", bytes.NewReader(srJSON))
 	for err != nil {
 		fmt.Println(err)
-		resp, err = http.Post(as.proxyUrl+"/advise", "application/json", bytes.NewReader(srJSON))
+		resp, err = http.Post("http://" + podIp + ":9998/advise", "application/json", bytes.NewReader(srJSON))
 	}
 log.Printf("asked simulator successfully")
 	responseJSON, err := ioutil.ReadAll(resp.Body)
@@ -140,7 +146,7 @@ log.Printf(string(responseJSON))
 		return
 	}
 log.Printf("got response from simulator")
-	var simulatorResponse []model.SchedulingResult
+	var simulatorResponse []SchedulingResult
 	err = json.Unmarshal(responseJSON, &simulatorResponse)
 	if err != nil {
 		response.WriteError(http.StatusExpectationFailed, err)

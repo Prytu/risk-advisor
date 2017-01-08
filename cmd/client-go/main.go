@@ -8,25 +8,25 @@ import (
 	"k8s.io/client-go/pkg/api/v1"
 	metav1 "k8s.io/client-go/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
-	"encoding/json"
 	"net/http"
 	"io/ioutil"
 )
 
 func main() {
-
-
-	podDef := "{\"apiVersion\":\"v1\",\"kind\":\"Pod\",\"metadata\":{\"name\":\"risk-adv\"},\"spec\":{\"containers\":[{\"name\":\"risk-adv\",\"image\":\"pposkrobko/riskadvisor\",\"ports\":[{\"containerPort\":9997}],\"volumeMounts\":[{\"mountPath\":\"/var/log/nginx\",\"name\":\"nginx-logs\"}]},{\"name\":\"log-truncator\",\"image\":\"busybox\",\"command\":[\"/bin/sh\"],\"args\":[\"-c\",\"while true; do cat /dev/null > /logdir/access.log; sleep 10; done\"],\"volumeMounts\":[{\"mountPath\":\"/logdir\",\"name\":\"nginx-logs\"}]}],\"volumes\":[{\"name\":\"nginx-logs\",\"emptyDir\":{}}]}}"
-
-
 	var pod v1.Pod
 
-	err := json.Unmarshal([]byte(podDef), &pod)
-	if err != nil {
-		panic(err.Error())
+	pod = v1.Pod{
+		ObjectMeta: v1.ObjectMeta{
+			Name: "simulator",
+		},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{v1.Container{
+				Name: "simulator",
+				Image: "pposkrobko/simulator",
+				Ports: []v1.ContainerPort{v1.ContainerPort{ContainerPort: 9997},},
+			},},
+		},
 	}
-
-	fmt.Println(pod.Name)
 
 
 	// creates the in-cluster config

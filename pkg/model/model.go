@@ -1,6 +1,6 @@
 package model
 
-import "k8s.io/kubernetes/pkg/api/v1"
+import "k8s.io/client-go/pkg/api/v1"
 
 type AdviceRequest struct {
 	Pods *[]v1.Pod `json:"pods"`

@@ -14,7 +14,7 @@ func main() {
 	port := flag.String("port", defaults.RiskAdvisorUserPort, "Port on which risk-advisors listens for users requests")
 	flag.Parse()
 
-	riskAdvisor := New(*proxyAddress)
+	riskAdvisor := main.New(*proxyAddress)
 
 	log.Printf("QQ Starting risk-advisor with:\n\t- port: %v\n\t- proxy URL: %v", *port, *proxyAddress)
 

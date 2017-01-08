@@ -114,27 +114,30 @@ log.Printf("created pod")
 	}
 log.Printf("got ip")
 	var podIp = newPod.Status.PodIP
-	resp, err := http.Get(
-		"http://" + podIp + ":9998/advise"
+	resp, err := http.Post(
+		"http://" + podIp + ":9998/advise",
+		"application/json",
+		bytes.NewReader(srJSON),
 	)
 	for err != nil {
 fmt.Println(err)
 newPod, err = clientset.CoreV1().Pods("default").Get("simulator", metav1.GetOptions{})
 podIp = newPod.Status.PodIP
 		time.Sleep(time.Second)
-		resp, err := http.Get(
-			"http://" + podIp + ":9998/advise"
+		resp, err = http.Post(
+			"http://" + podIp + ":9998/advise",
+			"application/json",
+			bytes.NewReader(srJSON),
 		)
 	}
 log.Printf("asking simulator")
 	resp, err = http.Post(as.proxyUrl+"/advise", "application/json", bytes.NewReader(srJSON))
-	for err != nil {
-		fmt.Println(err)
-		resp, err = http.Post(as.proxyUrl+"/advise", "application/json", bytes.NewReader(srJSON))
+	if err != nil {
+		response.WriteError(http.StatusNotFound, err)
+		return
 	}
-log.Printf("asked simulator successfully")
+log.Printf("asked simulator")
 	responseJSON, err := ioutil.ReadAll(resp.Body)
-log.Printf(string(responseJSON))
 	if err != nil {
 		response.WriteError(http.StatusInternalServerError, err)
 		return

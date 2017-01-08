@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kubernetesclient
+  labels: {
+   name: kubernetesclient
+  }
+spec:
+  containers: [
+    {
+      name: kubernetesclient,
+      image: pposkrobko/kubernetesclient
+    }
+  ]

@@ -6,7 +6,7 @@ import (
 	"net/http"
 
 	"github.com/deckarep/golang-set"
-	"k8s.io/client-go/pkg/api/v1"
+	"k8s.io/client-go/1.5/pkg/api/v1"
 	utilrand "k8s.io/kubernetes/pkg/util/rand"
 
 	"github.com/Prytu/risk-advisor/cmd/simulator/app/brain"

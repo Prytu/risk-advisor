@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"k8s.io/client-go/pkg/api/v1"
+	"k8s.io/client-go/1.5/pkg/api/v1"
 
 	"github.com/Prytu/risk-advisor/cmd/simulator/app/brain"
 	"github.com/Prytu/risk-advisor/cmd/simulator/app/riskadvisorHandler"

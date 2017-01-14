@@ -4,19 +4,19 @@ import (
 	"fmt"
 	"strconv"
 
-	"k8s.io/client-go/pkg/api/v1"
-	metav1 "k8s.io/client-go/pkg/apis/meta/v1"
-	"k8s.io/client-go/pkg/util/uuid"
+	"k8s.io/client-go/1.5/pkg/api/v1"
+	"k8s.io/client-go/1.5/pkg/api/unversioned"
+	"k8s.io/client-go/1.5/pkg/util/uuid"
 	utilrand "k8s.io/kubernetes/pkg/util/rand"
 
 	"github.com/Prytu/risk-advisor/pkg/model"
 )
 
 func updateNewPodData(pod *v1.Pod, resourceVersion int64) {
-	fillNewPodData(pod, resourceVersion, utilrand.String(model.MaxNameLength), metav1.Now())
+	fillNewPodData(pod, resourceVersion, utilrand.String(model.MaxNameLength), unversioned.Now())
 }
 
-func fillNewPodData(pod *v1.Pod, resourceVersion int64, podName string, creationTimestamp metav1.Time) {
+func fillNewPodData(pod *v1.Pod, resourceVersion int64, podName string, creationTimestamp unversioned.Time) {
 	pod.UID = uuid.NewUUID()
 	pod.CreationTimestamp = creationTimestamp
 	if pod.Name == "" {
@@ -34,10 +34,10 @@ func fillNewPodData(pod *v1.Pod, resourceVersion int64, podName string, creation
 }
 
 func bindPodToNode(pod *v1.Pod, nodeName string) {
-	fillBoundPodData(pod, nodeName, metav1.Now())
+	fillBoundPodData(pod, nodeName, unversioned.Now())
 }
 
-func fillBoundPodData(pod *v1.Pod, nodeName string, time metav1.Time) {
+func fillBoundPodData(pod *v1.Pod, nodeName string, time unversioned.Time) {
 	pod.Spec.NodeName = nodeName
 	pod.Status.Conditions = []v1.PodCondition{
 		{

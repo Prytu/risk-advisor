@@ -14,8 +14,8 @@ import (
 	"gopkg.in/gorilla/mux.v1"
 
 	"github.com/Prytu/risk-advisor/cmd/simulator/app/state"
-	"k8s.io/client-go/pkg/api/v1"
-	metav1 "k8s.io/client-go/pkg/apis/meta/v1"
+	"k8s.io/client-go/1.5/pkg/api/v1"
+	"k8s.io/client-go/1.5/pkg/api/unversioned"
 )
 
 // TODO: for now we use pod.Name to identify pods. Maybe use uid or something like that instead?
@@ -124,11 +124,11 @@ func (b *Brain) GetPods(w http.ResponseWriter, r *http.Request) {
 	resourceVersion := strconv.FormatInt(int64(b.state.GetResourceVersion()), 10)
 
 	podList := v1.PodList{
-		TypeMeta: metav1.TypeMeta{
+		TypeMeta: unversioned.TypeMeta{
 			Kind:       "PodList",
 			APIVersion: "v1",
 		},
-		ListMeta: metav1.ListMeta{
+		ListMeta: unversioned.ListMeta{
 			SelfLink:        "/api/v1/pods",
 			ResourceVersion: resourceVersion,
 		},
@@ -155,11 +155,11 @@ func (b *Brain) GetNodes(w http.ResponseWriter, r *http.Request) {
 	resourceVersion := strconv.FormatInt(int64(b.state.GetResourceVersion()), 10)
 
 	nodeList := v1.NodeList{
-		TypeMeta: metav1.TypeMeta{
+		TypeMeta: unversioned.TypeMeta{
 			Kind:       "NodeList",
 			APIVersion: "v1",
 		},
-		ListMeta: metav1.ListMeta{
+		ListMeta: unversioned.ListMeta{
 			SelfLink:        "/api/v1/nodes",
 			ResourceVersion: resourceVersion,
 		},

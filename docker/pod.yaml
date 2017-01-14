@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: risk-advisor
+  labels: {
+   name: risk-advisor
+  }
+spec:
+  containers: [
+    {
+      name: riskadvisor,
+      image: pposkrobko/riskadvisor,
+      ports: [
+        { 
+          containerPort: 9997 
+        }
+      ]
+    }
+  ]
+

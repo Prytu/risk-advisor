@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"k8s.io/client-go/1.5/pkg/api/v1"
+	"k8s.io/client-go/1.5/pkg/apis/extensions/v1beta1"
 )
 
 type ClusterState struct {
@@ -13,11 +14,11 @@ type ClusterState struct {
 
 	pods                   map[string]v1.Pod
 	nodes                  map[string]v1.Node
-	Pvcs                   []byte
-	Pvs                    []byte
-	Replicasets            []byte
-	Services               []byte
-	ReplicationControllers []byte
+	Pvcs                   *v1.PersistentVolumeClaimList
+	Pvs                    *v1.PersistentVolumeList
+	Replicasets            *v1beta1.ReplicaSetList
+	Services               *v1.ServiceList
+	ReplicationControllers *v1.ReplicationControllerList
 }
 
 func (s *ClusterState) AddPod(pod v1.Pod) {

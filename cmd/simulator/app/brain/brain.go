@@ -184,36 +184,61 @@ func (b *Brain) GetNodes(w http.ResponseWriter, r *http.Request) {
 func (b *Brain) GetPvcs(w http.ResponseWriter, r *http.Request) {
 	pvcs := b.state.Pvcs
 
+	pvcsJSON, err := json.Marshal(&pvcs)
+	if err != nil {
+		panic(fmt.Sprintf("Error marshalling response: %v.", err))
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(pvcs)
+	w.Write(pvcsJSON)
 }
 
 func (b *Brain) GetPvs(w http.ResponseWriter, r *http.Request) {
 	pvs := b.state.Pvs
 
+	pvsJSON, err := json.Marshal(&pvs)
+	if err != nil {
+		panic(fmt.Sprintf("Error marshalling response: %v.", err))
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(pvs)
+	w.Write(pvsJSON)
 }
 
 func (b *Brain) GetReplicasets(w http.ResponseWriter, r *http.Request) {
 	replicasets := b.state.Replicasets
 
+	replicasetsJSON, err := json.Marshal(&replicasets)
+	if err != nil {
+		panic(fmt.Sprintf("Error marshalling response: %v.", err))
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(replicasets)
+	w.Write(replicasetsJSON)
 }
 
 func (b *Brain) GetServices(w http.ResponseWriter, r *http.Request) {
 	services := b.state.Services
 
+	servicesJSON, err := json.Marshal(&services)
+	if err != nil {
+		panic(fmt.Sprintf("Error marshalling response: %v.", err))
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(services)
+	w.Write(servicesJSON)
 }
 
 func (b *Brain) GetReplicationControllers(w http.ResponseWriter, r *http.Request) {
 	replicationControllers := b.state.ReplicationControllers
 
+	replicationControllersJSON, err := json.Marshal(&replicationControllers)
+	if err != nil {
+		panic(fmt.Sprintf("Error marshalling response: %v.", err))
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(replicationControllers)
+	w.Write(replicationControllersJSON)
 }
 
 func (b *Brain) Watchers(w http.ResponseWriter, r *http.Request) {

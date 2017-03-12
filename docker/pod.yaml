@@ -17,17 +17,4 @@ spec:
       ]
     }
   ]
-----
-apiVersion: v1
-kind: Service
-metadata:
-  name: risk-advisor-service
-  labels:
-    name: risk-advisor
-spec:
-  type: NodePort
-  ports:
-    - port: 11111
-      targetPort: 9997
-  selector:
-    name: risk-advisor
+

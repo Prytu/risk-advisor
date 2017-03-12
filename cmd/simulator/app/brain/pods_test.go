@@ -7,15 +7,15 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"k8s.io/kubernetes/pkg/api/v1"
-	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
+	"k8s.io/client-go/1.5/pkg/api/v1"
+        "k8s.io/client-go/1.5/pkg/api/unversioned" 
 	utilrand "k8s.io/kubernetes/pkg/util/rand"
 )
 
 func TestUpdateNewEmptyPodData(t *testing.T) {
 	pod := &v1.Pod{}
 	resourceVersion := int64(1)
-	time := metav1.Now()
+	time := unversioned.Now()
 	name := utilrand.String(20)
 
 	fillNewPodData(pod, resourceVersion, name, time)
@@ -38,7 +38,7 @@ func TestUpdateNewPodData(t *testing.T) {
 		},
 	}
 	resourceVersion := int64(1)
-	time := metav1.Now()
+	time := unversioned.Now()
 
 	fillNewPodData(pod, resourceVersion, "", time)
 
@@ -55,7 +55,7 @@ func TestUpdateNewPodData(t *testing.T) {
 func TestBindPodToNode(t *testing.T) {
 	pod := &v1.Pod{}
 	nodeName := "nodename"
-	time := metav1.Now()
+	time := unversioned.Now()
 
 	fillBoundPodData(pod, nodeName, time)
 

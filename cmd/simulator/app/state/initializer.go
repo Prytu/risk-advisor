@@ -1,28 +1,67 @@
 package state
 
 import (
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"net/http"
 	"strconv"
 
+	"k8s.io/client-go/1.5/kubernetes"
 	"k8s.io/client-go/1.5/pkg/api/v1"
+	"k8s.io/client-go/1.5/pkg/api"
+	"k8s.io/client-go/1.5/rest"
+	"k8s.io/client-go/1.5/pkg/fields"
 
-	"github.com/Prytu/risk-advisor/cmd/simulator/app/state/urls"
+	"github.com/Prytu/risk-advisor/cmd/simulator/app/state/fieldselectors"
 )
 
-func InitState(apiserverURL string) *ClusterState {
-	pvcs := getJSONResource(apiserverURL + urls.Pvcs)
-	pvs := getJSONResource(apiserverURL + urls.Pvs)
-	replicasets := getJSONResource(apiserverURL + urls.Replicasets)
-	services := getJSONResource(apiserverURL + urls.Services)
-	replicationControllers := getJSONResource(apiserverURL + urls.ReplicationControllers)
+func InitState() *ClusterState {
 
-	var assignedPods v1.PodList
-	var unassignedPods v1.PodList
-	getResource(apiserverURL+urls.AssignedNonTerminatedPods, &assignedPods)
-	getResource(apiserverURL+urls.UnassignedNonTerminatedPods, &unassignedPods)
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		panic(fmt.Sprintf("Error getting Kubernetes in-cluster config %v", err))
+	}
+
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		panic(fmt.Sprintf("Error creating Kubernetes client %v", err))
+	}
+
+	pvcs, _ := clientset.Core().PersistentVolumeClaims("default").List(api.ListOptions{
+		ResourceVersion: "0",
+	})
+
+	pvs, _ := clientset.Core().PersistentVolumes().List(api.ListOptions{
+		ResourceVersion: "0",
+	})
+	
+	replicasets, _ := clientset.ExtensionsClient.ReplicaSets("default").List(api.ListOptions{
+		ResourceVersion: "0",
+	})
+
+	services, _ := clientset.Core().Services("default").List(api.ListOptions{
+		ResourceVersion: "0",
+	})
+
+	replicationControllers, _ := clientset.Core().ReplicationControllers("default").List(api.ListOptions{
+		ResourceVersion: "0",
+	})
+
+	var assignedSelector fields.Selector
+	stringAssignedSelector := fieldselectors.AssignedNonTerminatedPods
+	api.Convert_string_To_fields_Selector(&stringAssignedSelector, &assignedSelector, nil)
+
+	assignedPods, _ := clientset.Core().Pods("default").List(api.ListOptions{
+		FieldSelector: assignedSelector,
+		ResourceVersion: "0",
+	})
+
+	var unassignedSelector fields.Selector
+	stringUnassignedSelector := fieldselectors.UnassignedNonTerminatedPods
+	api.Convert_string_To_fields_Selector(&stringUnassignedSelector, &unassignedSelector, nil)
+
+	unassignedPods, _ := clientset.Core().Pods("default").List(api.ListOptions{
+		FieldSelector: unassignedSelector,
+		ResourceVersion: "0",
+	})
 
 	podMap := make(map[string]v1.Pod, len(assignedPods.Items)+len(unassignedPods.Items))
 	for _, pod := range assignedPods.Items {
@@ -32,8 +71,9 @@ func InitState(apiserverURL string) *ClusterState {
 		podMap[pod.Name] = pod
 	}
 
-	var nodeList v1.NodeList
-	getResource(apiserverURL+urls.Nodes, &nodeList)
+	nodeList, _ := clientset.Core().Nodes().List(api.ListOptions{
+		ResourceVersion: "0",
+	})
 
 	nodeMap := make(map[string]v1.Node, len(nodeList.Items))
 	for _, node := range nodeList.Items {
@@ -55,33 +95,4 @@ func InitState(apiserverURL string) *ClusterState {
 		Services:               services,
 		ReplicationControllers: replicationControllers,
 	}
-}
-
-func getResource(url string, resource interface{}) interface{} {
-	respJSON := getJSONResource(url)
-	err := json.Unmarshal(respJSON, resource)
-	if err != nil {
-		panic(fmt.Sprintf("get %v resp unmarshall error: %v", url, err))
-	}
-
-	return resource
-}
-
-func getJSONResource(url string) []byte {
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		panic(fmt.Sprintf("create request %v error: %v", url, err))
-	}
-	req.Header.Add("Content-Type", `application/json`)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		panic(fmt.Sprintf("get %v error: %v", url, err))
-	}
-
-	respJSON, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		panic(fmt.Sprintf("get %v resp ReadAll error: %v", url, err))
-	}
-
-	return respJSON
 }

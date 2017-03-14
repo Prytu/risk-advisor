@@ -14,13 +14,12 @@ import (
 )
 
 func main() {
-	apiserverAddress := flag.String("apiserver", defaults.ApiserverAddress, "Address on which real appisrver runs")
 	raCommunicationPort := flag.String("ra-port", defaults.RACommunicationPort, "Port for communictaion with risk-advisor")
 	schedulerCommunicationPort := flag.String("scheduler-port", defaults.SchedulerCommunicationPort, "Port for communication with scheduler")
 	flag.Parse()
 
 	// get state from apiserver
-	clusterState := state.InitState(*apiserverAddress)
+	clusterState := state.InitState()
 
 	// Channel for sending scheduling results between scheduler communication server and simulator
 	eventChannel := make(chan *v1.Event, 0)

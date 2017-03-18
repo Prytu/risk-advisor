@@ -17,12 +17,20 @@ import (
 )
 
 type AdviceService struct {
-	simulatorPort       string
-	clusterCommunicator kubeClient.ClusterCommunicator
+	simulatorPort           string
+	clusterCommunicator     kubeClient.ClusterCommunicator
+	httpClient              http.Client
+	simulatorStartupTimeout int
 }
 
-func New(simulatorPort string, clusterCommunicator kubeClient.ClusterCommunicator) http.Handler {
-	as := AdviceService{simulatorPort, clusterCommunicator}
+func New(simulatorPort string, clusterCommunicator kubeClient.ClusterCommunicator, httpClient http.Client,
+	simulatorStartupTimeout int) http.Handler {
+	as := AdviceService{
+		simulatorPort:           simulatorPort,
+		clusterCommunicator:     clusterCommunicator,
+		httpClient:              httpClient,
+		simulatorStartupTimeout: simulatorStartupTimeout,
+	}
 
 	wsContainer := restful.NewContainer()
 	as.Register(wsContainer)
@@ -39,7 +47,7 @@ func (as *AdviceService) Register(container *restful.Container) {
 	ws.Route(ws.POST("").To(as.sendAdviceRequest).
 		Doc("Post a request for advice").
 		Reads([]v1.Pod{}).
-		Returns(200, "OK", []model.SchedulingResult{}))
+		Returns(http.StatusOK, "OK", []model.SchedulingResult{}))
 
 	container.Add(ws)
 }
@@ -48,9 +56,11 @@ func (as *AdviceService) sendAdviceRequest(request *restful.Request, response *r
 	simulatorIP, err := as.startSimulatorPod()
 	defer as.cleanup()
 	if err != nil {
-		response.WriteError(
+		response.WriteHeaderAndEntity(
 			http.StatusInternalServerError,
-			fmt.Errorf("Error starting simulator pod: %s", err),
+			model.SchedulingError{
+				fmt.Sprintf("Error starting simulator pod: %s", err),
+			},
 		)
 		return
 	}
@@ -58,9 +68,11 @@ func (as *AdviceService) sendAdviceRequest(request *restful.Request, response *r
 	log.Print("Sending simulator request")
 	simulatorResponse, err := as.sendSimulatorRequest(simulatorIP, request)
 	if err != nil {
-		response.WriteError(
+		response.WriteHeaderAndEntity(
 			http.StatusInternalServerError,
-			fmt.Errorf("Error communicating with simulator: %s", err),
+			model.SchedulingError{
+				fmt.Sprintf("Error communicating with simulator: %s", err),
+			},
 		)
 		return
 	}
@@ -69,9 +81,11 @@ func (as *AdviceService) sendAdviceRequest(request *restful.Request, response *r
 	err = response.WriteEntity(simulatorResponse)
 	if err != nil {
 		log.WithError(err).Error("error writing response")
-		response.WriteError(
+		response.WriteHeaderAndEntity(
 			http.StatusInternalServerError,
-			fmt.Errorf("Unexpected server error."),
+			model.SchedulingError{
+				fmt.Sprint("Unexpected server error."),
+			},
 		)
 		return
 	}
@@ -79,19 +93,17 @@ func (as *AdviceService) sendAdviceRequest(request *restful.Request, response *r
 
 func (as *AdviceService) startSimulatorPod() (string, error) {
 	log.Print("Creating simulator pod")
-	podIP, err := as.clusterCommunicator.CreatePod(simulatorPod, "simulator", "default")
+	podIP, err := as.clusterCommunicator.CreatePod(simulatorPod, "simulator", "default", as.simulatorStartupTimeout)
 	if err != nil {
-		errorMessage := "error creating simulator pod"
-		log.WithError(err).Error(errorMessage)
-		return "", errors.New(errorMessage)
+		log.WithError(err).Error("error creating simulator pod")
+		return "", err
 	}
 
 	log.Print("Waiting until simulator is ready")
-	err = as.clusterCommunicator.WaitUntilPodReady(as.getSimulatorAdviseUrl(podIP))
+	err = as.clusterCommunicator.WaitUntilPodReady(as.getSimulatorAdviseUrl(podIP), as.simulatorStartupTimeout)
 	if err != nil {
-		errorMessage := "error waiting for simulator pod"
-		log.WithError(err).Error(errorMessage)
-		return "", errors.New(errorMessage)
+		log.WithError(err).Error("error waiting for simulator pod")
+		return "", err
 	}
 
 	return podIP, nil
@@ -103,7 +115,11 @@ func (as *AdviceService) sendSimulatorRequest(podIP string, request *restful.Req
 		return nil, err
 	}
 
-	resp, err := http.Post(as.getSimulatorAdviseUrl(podIP), "application/json", bytes.NewReader(simulatorRequestJSON))
+	resp, err := as.httpClient.Post(
+		as.getSimulatorAdviseUrl(podIP),
+		"application/json",
+		bytes.NewReader(simulatorRequestJSON),
+	)
 	if err != nil {
 		errorMessage := "error performing Post request to simulator"
 		log.WithError(err).Error(errorMessage)

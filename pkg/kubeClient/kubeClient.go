@@ -12,17 +12,17 @@ import (
 )
 
 type ClusterCommunicator interface {
-	CreatePod(pod *v1.Pod, podName, namespace string) (string, error)
-	WaitUntilPodReady(url string) error
+	CreatePod(pod *v1.Pod, podName, namespace string, timeout int) (string, error)
+	WaitUntilPodReady(url string, timeout int) error
 	DeletePod(namespace, podName string) error
 }
 
 type kubernetesClient struct {
-	clientset   *kubernetes.Clientset
-	waitTimeout int
+	clientset  *kubernetes.Clientset
+	httpClient http.Client
 }
 
-func New(waitTimeout int) (ClusterCommunicator, error) {
+func New(httpClient http.Client) (ClusterCommunicator, error) {
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		return nil, err
@@ -34,12 +34,15 @@ func New(waitTimeout int) (ClusterCommunicator, error) {
 	}
 
 	return &kubernetesClient{
-		clientset:   clientset,
-		waitTimeout: waitTimeout,
+		clientset:  clientset,
+		httpClient: httpClient,
 	}, nil
 }
 
-func (kc *kubernetesClient) CreatePod(pod *v1.Pod, podName, namespace string) (string, error) {
+func (kc *kubernetesClient) CreatePod(pod *v1.Pod, podName, namespace string, timeout int) (string, error) {
+	now := time.Now()
+	deadline := now.Add(time.Duration(timeout) * time.Second)
+
 	_, err := kc.clientset.Core().Pods(namespace).Create(pod)
 	if err != nil {
 		return "", err
@@ -49,23 +52,28 @@ func (kc *kubernetesClient) CreatePod(pod *v1.Pod, podName, namespace string) (s
 	for newPod.Status.PodIP == "" {
 		time.Sleep(time.Second)
 		newPod, err = kc.clientset.Core().Pods(namespace).Get(podName)
+
+		if time.Now().After(deadline) {
+			return "", errors.New("timed out when waiting for simulator pod to be assigned an IP")
+		}
 	}
 
 	return newPod.Status.PodIP, nil
 }
 
-func (kc *kubernetesClient) WaitUntilPodReady(url string) error {
-	_, err := http.Get(url)
+func (kc *kubernetesClient) WaitUntilPodReady(url string, timeout int) error {
+	now := time.Now()
+	deadline := now.Add(time.Duration(timeout) * time.Second)
 
-	attempts := 1
+	_, err := kc.httpClient.Get(url)
+
 	for err != nil {
 		time.Sleep(time.Second)
-		_, err = http.Get(url)
+		_, err = kc.httpClient.Get(url)
 
-		if attempts == kc.waitTimeout {
-			return errors.New("Timed out when waiting for pod to start running.")
+		if time.Now().After(deadline) {
+			return errors.New("timed out when waiting for simulator pod to start running")
 		}
-		attempts++
 	}
 
 	return nil

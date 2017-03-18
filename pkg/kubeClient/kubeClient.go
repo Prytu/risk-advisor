@@ -44,9 +44,17 @@ func (kc *kubernetesClient) CreatePod(pod *v1.Pod, podName, namespace string, ti
 	deadline := now.Add(time.Duration(timeout) * time.Second)
 
 	_, err := kc.clientset.Core().Pods(namespace).Create(pod)
-	if err != nil {
-		return "", err
+	for err != nil { // Loop here in case of simulator being still in 'Terminating' state after previous request
+		time.Sleep(time.Second)
+		_, err = kc.clientset.Core().Pods(namespace).Create(pod)
+
+		if time.Now().After(deadline) {
+			return "", err
+		}
 	}
+
+	now = time.Now()
+	deadline = now.Add(time.Duration(timeout) * time.Second)
 
 	newPod, err := kc.clientset.Core().Pods(namespace).Get(podName)
 	for newPod.Status.PodIP == "" {

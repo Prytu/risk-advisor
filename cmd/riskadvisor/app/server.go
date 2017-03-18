@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"sync"
 
 	"github.com/Prytu/risk-advisor/pkg/kubeClient"
 	"github.com/Prytu/risk-advisor/pkg/model"
@@ -21,6 +22,7 @@ type AdviceService struct {
 	clusterCommunicator     kubeClient.ClusterCommunicator
 	httpClient              http.Client
 	simulatorStartupTimeout int
+	handlerLock             sync.Mutex
 }
 
 func New(simulatorPort string, clusterCommunicator kubeClient.ClusterCommunicator, httpClient http.Client,
@@ -30,6 +32,7 @@ func New(simulatorPort string, clusterCommunicator kubeClient.ClusterCommunicato
 		clusterCommunicator:     clusterCommunicator,
 		httpClient:              httpClient,
 		simulatorStartupTimeout: simulatorStartupTimeout,
+		handlerLock:             sync.Mutex{},
 	}
 
 	wsContainer := restful.NewContainer()
@@ -53,6 +56,9 @@ func (as *AdviceService) Register(container *restful.Container) {
 }
 
 func (as *AdviceService) sendAdviceRequest(request *restful.Request, response *restful.Response) {
+	as.handlerLock.Lock()
+	defer as.handlerLock.Unlock()
+
 	simulatorIP, err := as.startSimulatorPod()
 	defer as.cleanup()
 	if err != nil {

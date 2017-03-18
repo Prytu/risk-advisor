@@ -31,3 +31,7 @@ _testmain.go
 *~ 
 
 vendor
+
+# compiled binaries
+docker/risk-advisor/riskadvisor
+docker/simulator/simulator

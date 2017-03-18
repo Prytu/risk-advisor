@@ -1,7 +1,7 @@
 #!/bin/bash
 
 echo -e "\n### Deleting risk-advisor and risk-advisor-service from Minikube"
-kubectl delete pods,services -l name=risk-advisor
+kubectl delete pods,services -l name=risk-advisor --grace-period=0 --force
 
 echo -e "\n### Starting risk-advisor pod"
 kubectl create -f "docker/pod.yaml"

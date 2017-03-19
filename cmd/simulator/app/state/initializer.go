@@ -5,10 +5,10 @@ import (
 	"strconv"
 
 	"k8s.io/client-go/1.5/kubernetes"
-	"k8s.io/client-go/1.5/pkg/api/v1"
 	"k8s.io/client-go/1.5/pkg/api"
-	"k8s.io/client-go/1.5/rest"
+	"k8s.io/client-go/1.5/pkg/api/v1"
 	"k8s.io/client-go/1.5/pkg/fields"
+	"k8s.io/client-go/1.5/rest"
 
 	"github.com/Prytu/risk-advisor/cmd/simulator/app/state/fieldselectors"
 )
@@ -32,7 +32,7 @@ func InitState() *ClusterState {
 	pvs, _ := clientset.Core().PersistentVolumes().List(api.ListOptions{
 		ResourceVersion: "0",
 	})
-	
+
 	replicasets, _ := clientset.ExtensionsClient.ReplicaSets("default").List(api.ListOptions{
 		ResourceVersion: "0",
 	})
@@ -50,7 +50,7 @@ func InitState() *ClusterState {
 	api.Convert_string_To_fields_Selector(&stringAssignedSelector, &assignedSelector, nil)
 
 	assignedPods, _ := clientset.Core().Pods("default").List(api.ListOptions{
-		FieldSelector: assignedSelector,
+		FieldSelector:   assignedSelector,
 		ResourceVersion: "0",
 	})
 
@@ -59,7 +59,7 @@ func InitState() *ClusterState {
 	api.Convert_string_To_fields_Selector(&stringUnassignedSelector, &unassignedSelector, nil)
 
 	unassignedPods, _ := clientset.Core().Pods("default").List(api.ListOptions{
-		FieldSelector: unassignedSelector,
+		FieldSelector:   unassignedSelector,
 		ResourceVersion: "0",
 	})
 

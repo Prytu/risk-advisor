@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"k8s.io/client-go/1.5/pkg/api/v1"
 	"k8s.io/client-go/1.5/pkg/api/unversioned"
+	"k8s.io/client-go/1.5/pkg/api/v1"
 	"k8s.io/client-go/1.5/pkg/util/uuid"
 	utilrand "k8s.io/kubernetes/pkg/util/rand"
 

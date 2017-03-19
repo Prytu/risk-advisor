@@ -13,8 +13,8 @@ import (
 
 	"github.com/Prytu/risk-advisor/pkg/model"
 	"k8s.io/client-go/1.5/kubernetes"
-	"k8s.io/client-go/1.5/pkg/api/v1"
 	"k8s.io/client-go/1.5/pkg/api"
+	"k8s.io/client-go/1.5/pkg/api/v1"
 	"k8s.io/client-go/1.5/rest"
 )
 

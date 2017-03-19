@@ -15,6 +15,10 @@ type SchedulingResult struct {
 	Message string `json:"message"`
 }
 
+type SchedulingError struct {
+	ErrorMessage string `json:"errorMessage"`
+}
+
 type CapacityResult struct {
 	Capacity int64
 }

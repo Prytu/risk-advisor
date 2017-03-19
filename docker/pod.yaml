@@ -9,7 +9,7 @@ spec:
   containers: [
     {
       name: riskadvisor,
-      image: pposkrobko/riskadvisor,
+      image: pposkrobko/risk-advisor,
       ports: [
         { 
           containerPort: 9997 

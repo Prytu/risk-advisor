@@ -27,18 +27,23 @@ type AdviceService struct {
 
 func New(simulatorPort string, clusterCommunicator kubeClient.ClusterCommunicator, httpClient http.Client,
 	simulatorStartupTimeout int) http.Handler {
-	as := AdviceService{
+	as := GetAdviceService(simulatorPort, clusterCommunicator, httpClient, simulatorStartupTimeout)
+
+	wsContainer := restful.NewContainer()
+	as.Register(wsContainer)
+
+	return wsContainer
+}
+
+func GetAdviceService (simulatorPort string, clusterCommunicator kubeClient.ClusterCommunicator, httpClient http.Client,
+	simulatorStartupTimeout int) AdviceService {
+	return AdviceService{
 		simulatorPort:           simulatorPort,
 		clusterCommunicator:     clusterCommunicator,
 		httpClient:              httpClient,
 		simulatorStartupTimeout: simulatorStartupTimeout,
 		handlerLock:             sync.Mutex{},
 	}
-
-	wsContainer := restful.NewContainer()
-	as.Register(wsContainer)
-
-	return wsContainer
 }
 
 func (as *AdviceService) Register(container *restful.Container) {

@@ -13,11 +13,12 @@ import (
 	"github.com/Prytu/risk-advisor/pkg/model"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/emicklei/go-restful"
 	"k8s.io/client-go/1.5/pkg/api/v1"
+	"gopkg.in/gorilla/mux.v1"
 )
 
 type AdviceService struct {
+	server 			*mux.Router
 	simulatorPort           string
 	clusterCommunicator     kubeClient.ClusterCommunicator
 	httpClient              http.Client
@@ -26,8 +27,9 @@ type AdviceService struct {
 }
 
 func New(simulatorPort string, clusterCommunicator kubeClient.ClusterCommunicator, httpClient http.Client,
-	simulatorStartupTimeout int) http.Handler {
+	simulatorStartupTimeout int) *AdviceService {
 	as := AdviceService{
+		server:			 mux.NewRouter(),
 		simulatorPort:           simulatorPort,
 		clusterCommunicator:     clusterCommunicator,
 		httpClient:              httpClient,
@@ -35,66 +37,48 @@ func New(simulatorPort string, clusterCommunicator kubeClient.ClusterCommunicato
 		handlerLock:             sync.Mutex{},
 	}
 
-	wsContainer := restful.NewContainer()
-	as.Register(wsContainer)
+	as.register()
 
-	return wsContainer
+	return &as
 }
 
-func (as *AdviceService) Register(container *restful.Container) {
-	ws := new(restful.WebService)
-	ws.Path("/advise").
-		Consumes(restful.MIME_JSON).
-		Produces(restful.MIME_JSON)
-
-	ws.Route(ws.POST("").To(as.sendAdviceRequest).
-		Doc("Post a request for advice").
-		Reads([]v1.Pod{}).
-		Returns(http.StatusOK, "OK", []model.SchedulingResult{}))
-
-	container.Add(ws)
+func (as *AdviceService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	as.server.ServeHTTP(w, r)
 }
 
-func (as *AdviceService) sendAdviceRequest(request *restful.Request, response *restful.Response) {
+func (as *AdviceService) register() {
+	advise := as.server.PathPrefix("/advise/").Subrouter()
+	advise.HandleFunc("/", as.sendAdviceRequest).Methods("POST")
+}
+
+func (as *AdviceService) sendAdviceRequest(w http.ResponseWriter, r *http.Request) {
 	as.handlerLock.Lock()
 	defer as.handlerLock.Unlock()
 
 	simulatorIP, err := as.startSimulatorPod()
 	defer as.cleanup()
 	if err != nil {
-		response.WriteHeaderAndEntity(
-			http.StatusInternalServerError,
-			model.SchedulingError{
-				fmt.Sprintf("Error starting simulator pod: %s", err),
-			},
-		)
+		writeError(w, fmt.Sprintf("Error starting simulator pod: %s", err))
 		return
 	}
 
 	log.Print("Sending simulator request")
-	simulatorResponse, err := as.sendSimulatorRequest(simulatorIP, request)
+	simulatorResponse, err := as.sendSimulatorRequest(simulatorIP, r)
 	if err != nil {
-		response.WriteHeaderAndEntity(
-			http.StatusInternalServerError,
-			model.SchedulingError{
-				fmt.Sprintf("Error communicating with simulator: %s", err),
-			},
-		)
+		writeError(w, fmt.Sprintf("Error communicating with simulator: %s", err))
 		return
 	}
 
 	log.Print("Received response from simulator")
-	err = response.WriteEntity(simulatorResponse)
+	riskAdvisorResponse, err := json.Marshal(simulatorResponse)
 	if err != nil {
-		log.WithError(err).Error("error writing response")
-		response.WriteHeaderAndEntity(
-			http.StatusInternalServerError,
-			model.SchedulingError{
-				fmt.Sprint("Unexpected server error."),
-			},
-		)
+		log.WithError(err).Error("Error writing simulator response")
+		writeError(w, fmt.Sprint("Unexpected server error."))
 		return
 	}
+
+	writeStatusCodeAndContentType(w, http.StatusOK)
+	w.Write(riskAdvisorResponse)
 }
 
 func (as *AdviceService) startSimulatorPod() (string, error) {
@@ -115,7 +99,7 @@ func (as *AdviceService) startSimulatorPod() (string, error) {
 	return podIP, nil
 }
 
-func (as *AdviceService) sendSimulatorRequest(podIP string, request *restful.Request) ([]model.SchedulingResult, error) {
+func (as *AdviceService) sendSimulatorRequest(podIP string, request *http.Request) ([]model.SchedulingResult, error) {
 	simulatorRequestJSON, err := as.generateSimulatorRequest(request)
 	if err != nil {
 		return nil, err
@@ -159,7 +143,7 @@ func (as *AdviceService) cleanup() {
 	}
 }
 
-func (as *AdviceService) generateSimulatorRequest(request *restful.Request) ([]byte, error) {
+func (as *AdviceService) generateSimulatorRequest(request *http.Request) ([]byte, error) {
 	pods, err := as.getPodsFromRequest(request)
 	if err != nil {
 		return nil, err
@@ -175,10 +159,10 @@ func (as *AdviceService) generateSimulatorRequest(request *restful.Request) ([]b
 	return simulatorRequestJSON, nil
 }
 
-func (as *AdviceService) getPodsFromRequest(request *restful.Request) ([]*v1.Pod, error) {
+func (as *AdviceService) getPodsFromRequest(request *http.Request) ([]*v1.Pod, error) {
 	var pods []*v1.Pod
 
-	body, err := ioutil.ReadAll(request.Request.Body)
+	body, err := ioutil.ReadAll(request.Body)
 	if err != nil {
 		errorMessage := "error reading request body"
 		log.WithError(err).Error(errorMessage)
@@ -197,4 +181,21 @@ func (as *AdviceService) getPodsFromRequest(request *restful.Request) ([]*v1.Pod
 
 func (as *AdviceService) getSimulatorAdviseUrl(podIP string) string {
 	return fmt.Sprintf("http://%s:%s/advise", podIP, as.simulatorPort)
+}
+
+func writeError(w http.ResponseWriter, errorMsg string) {
+	writeStatusCodeAndContentType(&w, http.StatusInternalServerError)
+	riskAdvisorResponse, err := json.Marshal(model.SchedulingError{
+		errorMsg,
+	})
+	if err != nil {
+		log.WithError(err).Fatal("error while marshalling error message")
+	}
+
+	w.Write(riskAdvisorResponse)
+}
+
+func writeStatusCodeAndContentType(w http.ResponseWriter, statusCode int) {
+	w.WriteHeader(statusCode)
+	w.Header().Set("Content-Type", "application/json")
 }

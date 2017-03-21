@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"time"
+	"fmt"
 
 	flag "github.com/spf13/pflag"
 
@@ -31,5 +32,5 @@ func main() {
 
 	log.Printf("Starting risk-advisor with:\n\t- port: %v\n\t- simulator port: %v", *port, *simulatorPort)
 
-	http.ListenAndServe(":"+*port, riskAdvisor)
+	http.ListenAndServe(fmt.Sprintf(":%s", *port), riskAdvisor)
 }

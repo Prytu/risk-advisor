@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"net/http"
 
+	log "github.com/Sirupsen/logrus"
 	"k8s.io/client-go/1.5/pkg/api/v1"
 
 	"github.com/Prytu/risk-advisor/cmd/simulator/app/brain"
 	"github.com/Prytu/risk-advisor/cmd/simulator/app/riskadvisorHandler"
 	"github.com/Prytu/risk-advisor/cmd/simulator/app/state"
 	"github.com/Prytu/risk-advisor/pkg/flags"
+	"github.com/Prytu/risk-advisor/pkg/kubeClient"
 )
 
 func main() {
@@ -18,8 +20,16 @@ func main() {
 	schedulerCommunicationPort := flag.String("scheduler-port", defaults.SchedulerCommunicationPort, "Port for communication with scheduler")
 	flag.Parse()
 
+	ksf, err := kubeClient.New(*http.DefaultClient)
+	if err != nil {
+		log.WithError(err).Fatal("Failed to communicate with cluster when building kubeClient.\n")
+	}
+
 	// get state from apiserver
-	clusterState := state.InitState()
+	clusterState, err := state.InitState(ksf)
+	if err != nil {
+		log.WithError(err).Fatal("Failed to fetch cluster state.")
+	}
 
 	// Channel for sending scheduling results between scheduler communication server and simulator
 	eventChannel := make(chan *v1.Event, 0)

@@ -4,64 +4,63 @@ import (
 	"fmt"
 	"strconv"
 
-	"k8s.io/client-go/1.5/kubernetes"
+	"github.com/Prytu/risk-advisor/cmd/simulator/app/state/fieldselectors"
+	"github.com/Prytu/risk-advisor/pkg/kubeClient"
 	"k8s.io/client-go/1.5/pkg/api"
 	"k8s.io/client-go/1.5/pkg/api/v1"
 	"k8s.io/client-go/1.5/pkg/fields"
-	"k8s.io/client-go/1.5/rest"
-
-	"github.com/Prytu/risk-advisor/cmd/simulator/app/state/fieldselectors"
 )
 
-func InitState() *ClusterState {
-
-	config, err := rest.InClusterConfig()
+func InitState(ksf kubeClient.ClusterStateFetcher) (*ClusterState, error) {
+	assignedSelector, err := convertFieldSelector(fieldselectors.AssignedNonTerminatedPods)
 	if err != nil {
-		panic(fmt.Sprintf("Error getting Kubernetes in-cluster config %v", err))
+		return nil, err
 	}
 
-	clientset, err := kubernetes.NewForConfig(config)
+	unassignedSelector, err := convertFieldSelector(fieldselectors.UnassignedNonTerminatedPods)
 	if err != nil {
-		panic(fmt.Sprintf("Error creating Kubernetes client %v", err))
+		return nil, err
 	}
 
-	pvcs, _ := clientset.Core().PersistentVolumeClaims("default").List(api.ListOptions{
-		ResourceVersion: "0",
-	})
+	pvcs, err := ksf.GetPVCs("default")
+	if err != nil {
+		return nil, fmt.Errorf("error fetching PVCs: %s", err)
+	}
 
-	pvs, _ := clientset.Core().PersistentVolumes().List(api.ListOptions{
-		ResourceVersion: "0",
-	})
+	pvs, err := ksf.GetPVs()
+	if err != nil {
+		return nil, fmt.Errorf("error fetching PVs: %s", err)
+	}
 
-	replicasets, _ := clientset.ExtensionsClient.ReplicaSets("default").List(api.ListOptions{
-		ResourceVersion: "0",
-	})
+	replicasets, err := ksf.GetReplicaSets("default")
+	if err != nil {
+		return nil, fmt.Errorf("error fetching ReplicaSets: %s", err)
+	}
 
-	services, _ := clientset.Core().Services("default").List(api.ListOptions{
-		ResourceVersion: "0",
-	})
+	services, err := ksf.GetServices("default")
+	if err != nil {
+		return nil, fmt.Errorf("error fetching Services: %s", err)
+	}
 
-	replicationControllers, _ := clientset.Core().ReplicationControllers("default").List(api.ListOptions{
-		ResourceVersion: "0",
-	})
+	replicationControllers, err := ksf.GetReplicationControllers("default")
+	if err != nil {
+		return nil, fmt.Errorf("error fetching Replication controllers: %s", err)
+	}
 
-	var assignedSelector fields.Selector
-	stringAssignedSelector := fieldselectors.AssignedNonTerminatedPods
-	api.Convert_string_To_fields_Selector(&stringAssignedSelector, &assignedSelector, nil)
+	assignedPods, err := ksf.GetPods("default", assignedSelector)
+	if err != nil {
+		return nil, fmt.Errorf("error fetching Assigned Pods: %s", err)
+	}
 
-	assignedPods, _ := clientset.Core().Pods("default").List(api.ListOptions{
-		FieldSelector:   assignedSelector,
-		ResourceVersion: "0",
-	})
+	unassignedPods, err := ksf.GetPods("default", unassignedSelector)
+	if err != nil {
+		return nil, fmt.Errorf("error fetching Unassigned Pods: %s", err)
+	}
 
-	var unassignedSelector fields.Selector
-	stringUnassignedSelector := fieldselectors.UnassignedNonTerminatedPods
-	api.Convert_string_To_fields_Selector(&stringUnassignedSelector, &unassignedSelector, nil)
-
-	unassignedPods, _ := clientset.Core().Pods("default").List(api.ListOptions{
-		FieldSelector:   unassignedSelector,
-		ResourceVersion: "0",
-	})
+	nodeList, err := ksf.GetNodes()
+	if err != nil {
+		return nil, fmt.Errorf("error fetching Nodes Pods: %s", err)
+	}
 
 	podMap := make(map[string]v1.Pod, len(assignedPods.Items)+len(unassignedPods.Items))
 	for _, pod := range assignedPods.Items {
@@ -71,10 +70,6 @@ func InitState() *ClusterState {
 		podMap[pod.Name] = pod
 	}
 
-	nodeList, _ := clientset.Core().Nodes().List(api.ListOptions{
-		ResourceVersion: "0",
-	})
-
 	nodeMap := make(map[string]v1.Node, len(nodeList.Items))
 	for _, node := range nodeList.Items {
 		nodeMap[node.Name] = node
@@ -82,7 +77,7 @@ func InitState() *ClusterState {
 
 	resourceVersion, err := strconv.ParseInt(nodeList.ResourceVersion, 10, 64)
 	if err != nil {
-		panic(fmt.Sprintf("Error parsing resourceVersion: %v", err))
+		return nil, fmt.Errorf("Error parsing resourceVersion: %s", err)
 	}
 
 	return &ClusterState{
@@ -94,5 +89,15 @@ func InitState() *ClusterState {
 		Replicasets:            replicasets,
 		Services:               services,
 		ReplicationControllers: replicationControllers,
+	}, nil
+}
+
+func convertFieldSelector(selectorString string) (fields.Selector, error) {
+	var selector fields.Selector
+	err := api.Convert_string_To_fields_Selector(&selectorString, &selector, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error converting FieldSelector %s: %s", selectorString, err)
 	}
+
+	return selector, nil
 }

@@ -1,21 +1,18 @@
 package brain
 
 import (
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
-	"net/http"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"gopkg.in/gorilla/mux.v1"
-
-	"github.com/Prytu/risk-advisor/cmd/simulator/app/state"
 	"k8s.io/client-go/1.5/pkg/api/unversioned"
 	"k8s.io/client-go/1.5/pkg/api/v1"
+	"k8s.io/client-go/1.5/pkg/apis/extensions/v1beta1"
+
+	"github.com/Prytu/risk-advisor/cmd/simulator/app/state"
 )
 
 // TODO: for now we use pod.Name to identify pods. Maybe use uid or something like that instead?
@@ -42,74 +39,18 @@ func New(state *state.ClusterState, eventChannel chan<- *v1.Event) *Brain {
 	}
 }
 
-func (b *Brain) Binding(w http.ResponseWriter, r *http.Request) {
-	var binding v1.Binding
-
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		panic(fmt.Sprintf("Error reading from request body: %v", err))
-	}
-
-	err = json.Unmarshal(body, &binding)
-	if err != nil {
-		panic(fmt.Sprintf("Error Unmarshalling request body: %v", err))
-		return
-	}
-
-	resp := b.handleBinding(&binding)
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(resp)
-}
-
-func (b *Brain) Event(w http.ResponseWriter, r *http.Request) {
-	var event v1.Event
-
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		panic(fmt.Sprintf("Error reading from request body: %v", err))
-	}
-
-	err = json.Unmarshal(body, &event)
-	if err != nil {
-		panic(fmt.Sprintf("Error Unmarshalling request body: %v", err))
-		return
-	}
-
-	resp := b.handleEvent(&event)
-
-	w.WriteHeader(http.StatusConflict)
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(resp)
-}
-
-// TODO: Maybe we should return 404 here?
-func (b *Brain) GetPod(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-
-	podname, ok := vars["podname"]
+func (b *Brain) GetPod(podName string) (*v1.Pod, error) {
+	pod, ok := b.state.GetPod(podName)
 	if !ok {
-		panic("No podname in vars in GetPod.")
+		return nil, fmt.Errorf("no podname with name %s in state", podName)
 	}
 
-	pod, ok := b.state.GetPod(podname)
-	if !ok {
-		panic(fmt.Sprintf("No podname with name %s in state.", podname))
-	}
-
-	podsJSON, err := json.Marshal(&pod)
-	if err != nil {
-		panic(fmt.Sprintf("Error marshalling response: %v.", err))
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(podsJSON)
+	return &pod, nil
 }
 
-func (b *Brain) GetPods(w http.ResponseWriter, r *http.Request) {
+func (b *Brain) GetPods(fieldSelector string) *v1.PodList {
 	var pods []v1.Pod
 	var filter state.PodFilter
-	fieldSelector := r.URL.Query().Get("fieldSelector")
 
 	if strings.Contains(fieldSelector, "spec.nodeName!=") {
 		filter = state.AssignedNonTerminatedPodFilter
@@ -123,7 +64,7 @@ func (b *Brain) GetPods(w http.ResponseWriter, r *http.Request) {
 	pods = b.state.GetPods(filter)
 	resourceVersion := strconv.FormatInt(int64(b.state.GetResourceVersion()), 10)
 
-	podList := v1.PodList{
+	podList := &v1.PodList{
 		TypeMeta: unversioned.TypeMeta{
 			Kind:       "PodList",
 			APIVersion: "v1",
@@ -135,26 +76,20 @@ func (b *Brain) GetPods(w http.ResponseWriter, r *http.Request) {
 		Items: pods,
 	}
 
-	podListJSON, err := json.Marshal(&podList)
-	if err != nil {
-		panic(fmt.Sprintf("Error marshalling response: %v.", err))
-	}
-
 	b.nodesMutex.Lock()
 	b.nodesMutex.Unlock()
 	// Temporary solution: sleep 1 second to make sure response to nodes request is delivered to client
 	// TODO: Fix
 	time.Sleep(time.Second)
 
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(podListJSON)
+	return podList
 }
 
-func (b *Brain) GetNodes(w http.ResponseWriter, r *http.Request) {
+func (b *Brain) GetNodes() *v1.NodeList {
 	nodes := b.state.GetNodes()
 	resourceVersion := strconv.FormatInt(int64(b.state.GetResourceVersion()), 10)
 
-	nodeList := v1.NodeList{
+	nodeList := &v1.NodeList{
 		TypeMeta: unversioned.TypeMeta{
 			Kind:       "NodeList",
 			APIVersion: "v1",
@@ -166,83 +101,33 @@ func (b *Brain) GetNodes(w http.ResponseWriter, r *http.Request) {
 		Items: nodes,
 	}
 
-	nodeListJSON, err := json.Marshal(&nodeList)
-	if err != nil {
-		panic(fmt.Sprintf("Error marshalling response: %v.", err))
-	}
-
 	if !b.isNodesRequestHandled {
 		b.isNodesRequestHandled = true
 		b.nodesMutex.Unlock()
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(nodeListJSON)
+	return nodeList
 }
 
-// TODO: Make a 'generic' function for those handlers
-func (b *Brain) GetPvcs(w http.ResponseWriter, r *http.Request) {
-	pvcs := b.state.Pvcs
-
-	pvcsJSON, err := json.Marshal(&pvcs)
-	if err != nil {
-		panic(fmt.Sprintf("Error marshalling response: %v.", err))
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(pvcsJSON)
+// TODO: Make a 'generic' function for those functions
+func (b *Brain) GetPvcs() *v1.PersistentVolumeClaimList {
+	return b.state.Pvcs
 }
 
-func (b *Brain) GetPvs(w http.ResponseWriter, r *http.Request) {
-	pvs := b.state.Pvs
-
-	pvsJSON, err := json.Marshal(&pvs)
-	if err != nil {
-		panic(fmt.Sprintf("Error marshalling response: %v.", err))
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(pvsJSON)
+func (b *Brain) GetPvs() *v1.PersistentVolumeList {
+	return b.state.Pvs
 }
 
-func (b *Brain) GetReplicasets(w http.ResponseWriter, r *http.Request) {
-	replicasets := b.state.Replicasets
-
-	replicasetsJSON, err := json.Marshal(&replicasets)
-	if err != nil {
-		panic(fmt.Sprintf("Error marshalling response: %v.", err))
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(replicasetsJSON)
+func (b *Brain) GetReplicasets() *v1beta1.ReplicaSetList {
+	return b.state.Replicasets
 }
 
-func (b *Brain) GetServices(w http.ResponseWriter, r *http.Request) {
-	services := b.state.Services
-
-	servicesJSON, err := json.Marshal(&services)
-	if err != nil {
-		panic(fmt.Sprintf("Error marshalling response: %v.", err))
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(servicesJSON)
+func (b *Brain) GetServices() *v1.ServiceList {
+	return b.state.Services
 }
 
-func (b *Brain) GetReplicationControllers(w http.ResponseWriter, r *http.Request) {
-	replicationControllers := b.state.ReplicationControllers
-
-	replicationControllersJSON, err := json.Marshal(&replicationControllers)
-	if err != nil {
-		panic(fmt.Sprintf("Error marshalling response: %v.", err))
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(replicationControllersJSON)
-}
-
-func (b *Brain) Watchers(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte(""))
+func (b *Brain) GetReplicationControllers() *v1.ReplicationControllerList {
+	return b.state.ReplicationControllers
 }
 
 func (b *Brain) AddPodToState(pod v1.Pod) {
@@ -252,8 +137,24 @@ func (b *Brain) AddPodToState(pod v1.Pod) {
 	b.state.AddPod(pod)
 }
 
+func (b *Brain) Watchers() []byte {
+	return []byte("")
+}
+
+func (b *Brain) Event(event *v1.Event) []byte {
+	if event.InvolvedObject.Kind != "Pod" {
+		log.Printf("Non-pod event: %v.", event)
+		return []byte("")
+	}
+
+	// here we send scheduling event
+	b.eventChannel <- event
+
+	return []byte("")
+}
+
 // TODO: maybe generate binding response instead of sending the same for each? (check if it is necessary)
-func (b *Brain) handleBinding(binding *v1.Binding) []byte {
+func (b *Brain) Binding(binding *v1.Binding) []byte {
 	podName := binding.ObjectMeta.Name
 	nodeName := binding.Target.Name
 
@@ -268,16 +169,4 @@ func (b *Brain) handleBinding(binding *v1.Binding) []byte {
 	// here we just bind the pod to node, the scheduling result will be sent as Event and processed there
 
 	return bindingResponse
-}
-
-func (b *Brain) handleEvent(event *v1.Event) []byte {
-	if event.InvolvedObject.Kind != "Pod" {
-		log.Printf("Non-pod event: %v.", event)
-		return []byte("")
-	}
-
-	// here we send scheduling event
-	b.eventChannel <- event
-
-	return []byte("")
 }

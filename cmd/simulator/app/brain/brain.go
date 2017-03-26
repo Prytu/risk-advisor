@@ -154,13 +154,13 @@ func (b *Brain) Event(event *v1.Event) []byte {
 }
 
 // TODO: maybe generate binding response instead of sending the same for each? (check if it is necessary)
-func (b *Brain) Binding(binding *v1.Binding) []byte {
+func (b *Brain) Binding(binding *v1.Binding) ([]byte, error) {
 	podName := binding.ObjectMeta.Name
 	nodeName := binding.Target.Name
 
 	pod, ok := b.state.GetPod(podName)
 	if !ok {
-		panic(fmt.Sprintf("Error fetching pod from State in Binding handling: pod with name %s not found!", podName))
+		return nil, fmt.Errorf("Error fetching pod from State in Binding handling: pod with name %s not found!", podName)
 	}
 
 	bindPodToNode(&pod, nodeName)
@@ -168,5 +168,5 @@ func (b *Brain) Binding(binding *v1.Binding) []byte {
 
 	// here we just bind the pod to node, the scheduling result will be sent as Event and processed there
 
-	return bindingResponse
+	return bindingResponse, nil
 }

@@ -2,13 +2,13 @@ package riskadvisorhandler
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"k8s.io/client-go/1.5/pkg/api/v1"
-	"log"
 	"net/http"
+
+	log "github.com/Sirupsen/logrus"
+	"k8s.io/client-go/1.5/pkg/api/v1"
 
 	"github.com/Prytu/risk-advisor/cmd/simulator/app/brain"
 	"github.com/Prytu/risk-advisor/cmd/simulator/app/schedulerHandler"
@@ -18,26 +18,26 @@ import (
 
 type HTTPHandlerFunc func(w http.ResponseWriter, r *http.Request)
 
-func NewMultiplePodAdviseHandler(b *brain.Brain, schedulerCommunicationPort string, eventChannel chan *v1.Event) HTTPHandlerFunc {
-
+func MultiplePodAdviseHandler(b *brain.Brain, schedulerCommunicationPort string, eventChannel chan *v1.Event) HTTPHandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		clusterMutations, err := parseAdviseRequestBody(r.Body)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			errorMsg := "invalid request body"
+			log.WithError(err).Error(errorMsg)
+			respondWithError(w, fmt.Sprintf("%s (%s)", errorMsg, err), http.StatusBadRequest)
 			return
 		}
 
-		log.Printf("Starting scheduler server on port %s\n", schedulerCommunicationPort)
-
 		schedHandler := schedulerHandler.New(b, schedulerCommunicationPort)
-		go http.ListenAndServe(":"+schedulerCommunicationPort, schedHandler)
-
 		s := simulator.New(b, schedHandler, eventChannel)
 
 		result := s.RunMultiplePodSimulation(clusterMutations.ToCreate, clusterMutations.ToDelete)
+
 		resultJSON, err := json.MarshalIndent(result, "", "  ")
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			errorMsg := "error marshalling response"
+			log.WithError(err).Error(errorMsg)
+			respondWithError(w, fmt.Sprintf("%s (%s)", errorMsg, err), http.StatusInternalServerError)
 			return
 		}
 
@@ -46,49 +46,44 @@ func NewMultiplePodAdviseHandler(b *brain.Brain, schedulerCommunicationPort stri
 	}
 }
 
-// TODO: this is a copy paste of /\. Fix
-func NewCapacityHandler(b *brain.Brain, schedulerCommunicationPort string, eventChannel chan *v1.Event) HTTPHandlerFunc {
-
+func ErrorResponseHandler(err error) HTTPHandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		clusterMutations, err := parseAdviseRequestBody(r.Body)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		log.Printf("Starting scheduler server on port %s\n", schedulerCommunicationPort)
-
-		schedHandler := schedulerHandler.New(b, schedulerCommunicationPort)
-		go http.ListenAndServe(":"+schedulerCommunicationPort, schedHandler)
-
-		s := simulator.New(b, schedHandler, eventChannel)
-
-		result := s.RunCapacitySimulation(clusterMutations.ToCreate[0])
-		resultJSON, err := json.MarshalIndent(result, "", "  ")
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(resultJSON)
+		errorMessage := fmt.Sprintf("Error during simulator initalization: %s.", err)
+		respondWithError(w, errorMessage, http.StatusInternalServerError)
 	}
 }
 
 func parseAdviseRequestBody(requestBody io.ReadCloser) (*model.SimulatorRequest, error) {
 	body, err := ioutil.ReadAll(requestBody)
 	if err != nil {
-		errorMessage := fmt.Sprintf("Error reading request body: %v\n", err)
-		return nil, errors.New(errorMessage)
+		return nil, fmt.Errorf("error reading request body: %s", err)
 	}
 
 	var adviceRequest model.SimulatorRequest
 
 	err = json.Unmarshal(body, &adviceRequest)
 	if err != nil {
-		errorMessage := fmt.Sprintf("Error unmarshalling body: %v\n", err)
-		return nil, errors.New(errorMessage)
+		return nil, fmt.Errorf("error unmarshalling body: %s", err)
 	}
 
 	return &adviceRequest, nil
+}
+
+func respondWithError(w http.ResponseWriter, appError string, statusCode int) {
+	errStruct := model.SchedulingError{
+		ErrorMessage: appError,
+	}
+
+	errJSON, err := json.MarshalIndent(errStruct, "", "  ")
+	if err != nil {
+		errorMsg := fmt.Sprintf("Error marshalling error response: %s of application error: %s.", err, appError)
+		log.WithError(err).Error(errorMsg)
+		http.Error(w, errorMsg, http.StatusInternalServerError) // Just answer with text/plain message
+
+		return
+	}
+
+	w.WriteHeader(statusCode)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(errJSON)
 }

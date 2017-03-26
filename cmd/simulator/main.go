@@ -20,29 +20,39 @@ func main() {
 	schedulerCommunicationPort := flag.String("scheduler-port", defaults.SchedulerCommunicationPort, "Port for communication with scheduler")
 	flag.Parse()
 
+	raHandlerFunc := initialize(*schedulerCommunicationPort)
+
+	// Server for communication between risk-advisor and simulator
+	raHandler := riskadvisorhandler.New(raHandlerFunc)
+
+	http.ListenAndServe(fmt.Sprintf(":%s", *raCommunicationPort), raHandler)
+}
+
+// Returns HTTPHandlerFunc that will handle requests from riskadvisor.
+// On initializtion error it will return a function that responds with error message that will describe that error.
+func initialize(schedulerCommunicationPort string) riskadvisorhandler.HTTPHandlerFunc {
 	ksf, err := kubeClient.New(*http.DefaultClient)
 	if err != nil {
-		log.WithError(err).Fatal("Failed to communicate with cluster when building kubeClient.\n")
+		errorMsg := "failed to communicate with cluster when building kubeClient"
+		log.WithError(err).Error(errorMsg)
+
+		return riskadvisorhandler.ErrorResponseHandler(fmt.Errorf("%s (%s)", errorMsg, err))
 	}
 
 	// get state from apiserver
 	clusterState, err := state.InitState(ksf)
 	if err != nil {
-		log.WithError(err).Fatal("Failed to fetch cluster state.")
+		errorMsg := "failed to fetch cluster state"
+		log.WithError(err).Error(errorMsg)
+
+		return riskadvisorhandler.ErrorResponseHandler(fmt.Errorf("%s (%s)", errorMsg, err))
 	}
 
 	// Channel for sending scheduling results between scheduler communication server and simulator
 	eventChannel := make(chan *v1.Event, 0)
 
-	// Scheduler communication server with some logic
 	b := brain.New(clusterState, eventChannel)
 
-	// Handler for risk-advisor requests (advise, capacity)
-	adviseHandler := riskadvisorhandler.NewMultiplePodAdviseHandler(b, *schedulerCommunicationPort, eventChannel)
-	capacityHandler := riskadvisorhandler.NewCapacityHandler(b, *schedulerCommunicationPort, eventChannel)
-
-	// Server for communication between risk-advisor and simulator
-	raHandler := riskadvisorhandler.New(adviseHandler, capacityHandler)
-
-	http.ListenAndServe(fmt.Sprintf(":%s", *raCommunicationPort), raHandler)
+	// Handler for risk-advisor requests (advise)
+	return riskadvisorhandler.MultiplePodAdviseHandler(b, schedulerCommunicationPort, eventChannel)
 }

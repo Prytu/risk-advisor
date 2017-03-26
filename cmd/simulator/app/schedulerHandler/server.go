@@ -146,7 +146,10 @@ func (sh *SchedulerHandler) binding(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := sh.brain.Binding(&binding)
+	resp, err := sh.brain.Binding(&binding)
+	if err != nil {
+		panic(err)
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(resp)

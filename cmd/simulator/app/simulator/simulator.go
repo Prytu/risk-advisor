@@ -49,6 +49,7 @@ func (s *Simulator) RunMultiplePodSimulation(podsToCreate, toDelete []*v1.Pod) [
 	}
 
 	// Run scheduler communication server
+	log.Printf("Starting scheduler server on port %s\n", s.schedulerHandler.Port)
 	go http.ListenAndServe(fmt.Sprintf(":%s", s.schedulerHandler.Port), s.schedulerHandler)
 
 	for {
@@ -80,27 +81,6 @@ func (s *Simulator) RunMultiplePodSimulation(podsToCreate, toDelete []*v1.Pod) [
 	}
 
 	return results
-}
-
-func (s *Simulator) RunCapacitySimulation(podToSimulate *v1.Pod) *model.CapacityResult {
-	capacity := int64(0)
-
-	for {
-		podToSimulate.Name = utilrand.String(model.MaxNameLength)
-		s.brain.AddPodToState(*podToSimulate)
-
-		event := <-s.eventChannel
-
-		if event.Reason == "FailedScheduling" {
-			break
-		} else {
-			capacity++
-		}
-	}
-
-	return &model.CapacityResult{
-		Capacity: capacity,
-	}
 }
 
 func schedulingResultFromEvent(event *v1.Event) *model.SchedulingResult {

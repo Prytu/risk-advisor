@@ -8,11 +8,10 @@ type RiskAdvisorHandler struct {
 	server *http.ServeMux
 }
 
-func New(adviseHandler, capacityHandler HTTPHandlerFunc) *RiskAdvisorHandler {
+func New(adviseHandler HTTPHandlerFunc) *RiskAdvisorHandler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/advise", adviseHandler)
-	mux.HandleFunc("/capacity", capacityHandler)
 
 	return &RiskAdvisorHandler{
 		server: mux,

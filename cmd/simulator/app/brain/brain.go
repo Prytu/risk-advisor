@@ -1,6 +1,7 @@
 package brain
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"strconv"
@@ -160,13 +161,17 @@ func (b *Brain) Binding(binding *v1.Binding) ([]byte, error) {
 
 	pod, ok := b.state.GetPod(podName)
 	if !ok {
-		return nil, fmt.Errorf("Error fetching pod from State in Binding handling: pod with name %s not found!", podName)
+		return nil, fmt.Errorf("error fetching pod from State: pod with name %s not found", podName)
 	}
 
 	bindPodToNode(&pod, nodeName)
 	b.state.UpdatePod(podName, pod)
 
-	// here we just bind the pod to node, the scheduling result will be sent as Event and processed there
+	// here we just bind the pod to node, the scheduling result will be sent as an Event and processed there
+
+	if bindingResponse == nil {
+		return nil, errors.New("error initalizing binding response")
+	}
 
 	return bindingResponse, nil
 }

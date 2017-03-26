@@ -2,29 +2,33 @@ package schedulerHandler
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 
+	log "github.com/Sirupsen/logrus"
 	"gopkg.in/gorilla/mux.v1"
+	"k8s.io/client-go/1.5/pkg/api/v1"
 
 	"github.com/Prytu/risk-advisor/cmd/simulator/app/brain"
-	"k8s.io/client-go/1.5/pkg/api/v1"
 )
 
 type SchedulerHandler struct {
-	server *mux.Router
-	Port   string
-	brain  *brain.Brain
+	server  *mux.Router
+	Port    string
+	brain   *brain.Brain
+	errChan chan<- error
 }
 
-func New(b *brain.Brain, port string) *SchedulerHandler {
+func New(b *brain.Brain, port string, errChan chan<- error) *SchedulerHandler {
 	r := mux.NewRouter()
 
 	sh := &SchedulerHandler{
-		server: r,
-		Port:   port,
-		brain:  b,
+		server:  r,
+		Port:    port,
+		brain:   b,
+		errChan: errChan,
 	}
 
 	apiv1 := r.PathPrefix("/api/v1/").Subrouter()
@@ -52,6 +56,7 @@ func New(b *brain.Brain, port string) *SchedulerHandler {
 	return sh
 }
 
+// TODO: Check if we can just 'return' without answering to scheduler in handlers when error happens
 func (sh *SchedulerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	sh.server.ServeHTTP(w, r)
 }
@@ -67,7 +72,8 @@ func (sh *SchedulerHandler) getNodes(w http.ResponseWriter, r *http.Request) {
 
 	nodeListJSON, err := json.Marshal(&nodeList)
 	if err != nil {
-		panic(fmt.Sprintf("Error marshalling response: %v.", err))
+		sh.handleError(marshallingError("getNodes", err))
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -80,17 +86,19 @@ func (sh *SchedulerHandler) getPod(w http.ResponseWriter, r *http.Request) {
 
 	podName, ok := vars["podname"]
 	if !ok {
-		panic("No podname in vars in GetPod.")
+		sh.handleError(errors.New("No `podname` in vars in getPod."))
+		return
 	}
 
 	pod, err := sh.brain.GetPod(podName)
 	if err != nil {
-		panic(err)
+		sh.handleError(fmt.Errorf("getPod error: %s", err))
 	}
 
 	podsJSON, err := json.Marshal(pod)
 	if err != nil {
-		panic(fmt.Sprintf("Error marshalling response: %v.", err))
+		sh.handleError(marshallingError("getPod", err))
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -104,7 +112,8 @@ func (sh *SchedulerHandler) getPods(w http.ResponseWriter, r *http.Request) {
 
 	podListJSON, err := json.Marshal(&podList)
 	if err != nil {
-		panic(fmt.Sprintf("Error marshalling response: %v.", err))
+		sh.handleError(marshallingError("getPods", err))
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -116,12 +125,13 @@ func (sh *SchedulerHandler) event(w http.ResponseWriter, r *http.Request) {
 
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		panic(fmt.Sprintf("Error reading from request body: %v", err))
+		sh.handleError(fmt.Errorf("error reading from request body in event handler: %v", err))
+		return
 	}
 
 	err = json.Unmarshal(body, &event)
 	if err != nil {
-		panic(fmt.Sprintf("Error Unmarshalling request body: %v", err))
+		sh.handleError(fmt.Errorf("error unmarshalling request body in event handler: %v", err))
 		return
 	}
 
@@ -137,18 +147,20 @@ func (sh *SchedulerHandler) binding(w http.ResponseWriter, r *http.Request) {
 
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		panic(fmt.Sprintf("Error reading from request body: %v", err))
+		sh.handleError(fmt.Errorf("error reading from request body in binding handler: %v", err))
+		return
 	}
 
 	err = json.Unmarshal(body, &binding)
 	if err != nil {
-		panic(fmt.Sprintf("Error Unmarshalling request body: %v", err))
+		sh.handleError(fmt.Errorf("error unmarshalling request body in binding handler: %v", err))
 		return
 	}
 
 	resp, err := sh.brain.Binding(&binding)
 	if err != nil {
-		panic(err)
+		sh.handleError(fmt.Errorf("error in binding handler: %s", err))
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -161,7 +173,8 @@ func (sh *SchedulerHandler) getPvcs(w http.ResponseWriter, r *http.Request) {
 
 	pvcsJSON, err := json.Marshal(&pvcs)
 	if err != nil {
-		panic(fmt.Sprintf("Error marshalling response: %v.", err))
+		sh.handleError(marshallingError("getPvcs", err))
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -173,7 +186,8 @@ func (sh *SchedulerHandler) getPvs(w http.ResponseWriter, r *http.Request) {
 
 	pvsJSON, err := json.Marshal(&pvs)
 	if err != nil {
-		panic(fmt.Sprintf("Error marshalling response: %v.", err))
+		sh.handleError(marshallingError("getPvs", err))
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -185,7 +199,8 @@ func (sh *SchedulerHandler) getReplicasets(w http.ResponseWriter, r *http.Reques
 
 	replicasetsJSON, err := json.Marshal(&replicasets)
 	if err != nil {
-		panic(fmt.Sprintf("Error marshalling response: %v.", err))
+		sh.handleError(marshallingError("getReplicasets", err))
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -197,7 +212,8 @@ func (sh *SchedulerHandler) getServices(w http.ResponseWriter, r *http.Request) 
 
 	servicesJSON, err := json.Marshal(&services)
 	if err != nil {
-		panic(fmt.Sprintf("Error marshalling response: %v.", err))
+		sh.handleError(marshallingError("getServices", err))
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -209,9 +225,20 @@ func (sh *SchedulerHandler) getReplicationControllers(w http.ResponseWriter, r *
 
 	replicationControllersJSON, err := json.Marshal(&replicationControllers)
 	if err != nil {
-		panic(fmt.Sprintf("Error marshalling response: %v.", err))
+		sh.handleError(marshallingError("getReplicationControllers", err))
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(replicationControllersJSON)
+}
+
+func (sh *SchedulerHandler) handleError(err error) {
+	errMsg := fmt.Errorf("SchedulerHandler error: %s", err)
+	log.WithError(err).Error(errMsg)
+	sh.errChan <- errMsg
+}
+
+func marshallingError(handlerName string, err error) error {
+	return fmt.Errorf("error marshalling response in %s: %s", handlerName, err)
 }

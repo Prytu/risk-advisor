@@ -10,6 +10,8 @@ import (
 
 	"github.com/Prytu/risk-advisor/cmd/simulator/app/brain"
 	"github.com/Prytu/risk-advisor/cmd/simulator/app/riskadvisorHandler"
+	"github.com/Prytu/risk-advisor/cmd/simulator/app/schedulerHandler"
+	"github.com/Prytu/risk-advisor/cmd/simulator/app/simulator"
 	"github.com/Prytu/risk-advisor/cmd/simulator/app/state"
 	"github.com/Prytu/risk-advisor/pkg/flags"
 	"github.com/Prytu/risk-advisor/pkg/kubeClient"
@@ -21,8 +23,6 @@ func main() {
 	flag.Parse()
 
 	raHandlerFunc := initialize(*schedulerCommunicationPort)
-
-	// Server for communication between risk-advisor and simulator
 	raHandler := riskadvisorhandler.New(raHandlerFunc)
 
 	http.ListenAndServe(fmt.Sprintf(":%s", *raCommunicationPort), raHandler)
@@ -48,11 +48,16 @@ func initialize(schedulerCommunicationPort string) riskadvisorhandler.HTTPHandle
 		return riskadvisorhandler.ErrorResponseHandler(fmt.Errorf("%s (%s)", errorMsg, err))
 	}
 
-	// Channel for sending scheduling results between scheduler communication server and simulator
-	eventChannel := make(chan *v1.Event, 0)
+	// Channel for sending scheduling results between brain and simulator
+	eventChannel := make(chan *v1.Event)
+	// Channel for simulation errors
+	errorChannel := make(chan error)
 
 	b := brain.New(clusterState, eventChannel)
+	sh := schedulerHandler.New(b, schedulerCommunicationPort, errorChannel)
+
+	s := simulator.New(b, sh, eventChannel, errorChannel)
 
 	// Handler for risk-advisor requests (advise)
-	return riskadvisorhandler.MultiplePodAdviseHandler(b, schedulerCommunicationPort, eventChannel)
+	return riskadvisorhandler.MultiplePodAdviseHandler(s)
 }

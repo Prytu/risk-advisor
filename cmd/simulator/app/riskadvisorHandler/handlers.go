@@ -8,17 +8,14 @@ import (
 	"net/http"
 
 	log "github.com/Sirupsen/logrus"
-	"k8s.io/client-go/1.5/pkg/api/v1"
 
-	"github.com/Prytu/risk-advisor/cmd/simulator/app/brain"
-	"github.com/Prytu/risk-advisor/cmd/simulator/app/schedulerHandler"
 	"github.com/Prytu/risk-advisor/cmd/simulator/app/simulator"
 	"github.com/Prytu/risk-advisor/pkg/model"
 )
 
 type HTTPHandlerFunc func(w http.ResponseWriter, r *http.Request)
 
-func MultiplePodAdviseHandler(b *brain.Brain, schedulerCommunicationPort string, eventChannel chan *v1.Event) HTTPHandlerFunc {
+func MultiplePodAdviseHandler(s simulator.SimulationRunner) HTTPHandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		clusterMutations, err := parseAdviseRequestBody(r.Body)
 		if err != nil {
@@ -28,10 +25,13 @@ func MultiplePodAdviseHandler(b *brain.Brain, schedulerCommunicationPort string,
 			return
 		}
 
-		schedHandler := schedulerHandler.New(b, schedulerCommunicationPort)
-		s := simulator.New(b, schedHandler, eventChannel)
-
-		result := s.RunMultiplePodSimulation(clusterMutations.ToCreate, clusterMutations.ToDelete)
+		result, err := s.RunMultiplePodSimulation(clusterMutations.ToCreate, clusterMutations.ToDelete)
+		if err != nil {
+			errorMsg := "simulation error"
+			log.WithError(err).Error(errorMsg)
+			respondWithError(w, fmt.Sprintf("%s (%s)", errorMsg, err), http.StatusInternalServerError)
+			return
+		}
 
 		resultJSON, err := json.MarshalIndent(result, "", "  ")
 		if err != nil {
@@ -58,6 +58,8 @@ func parseAdviseRequestBody(requestBody io.ReadCloser) (*model.SimulatorRequest,
 	if err != nil {
 		return nil, fmt.Errorf("error reading request body: %s", err)
 	}
+
+	log.WithField("request body", string(body)).Error("request body")
 
 	var adviceRequest model.SimulatorRequest
 

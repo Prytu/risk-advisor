@@ -264,7 +264,6 @@ imports:
   version: 58b7c16a52c03e4a849874602be42ee71afdcab1
   subpackages:
   - pkg/util/rand
-testImports:
 - name: github.com/pmezard/go-difflib
   version: d8ed2627bdf02c080bf22230dbb337003b7aba2d
   subpackages:
@@ -273,3 +272,5 @@ testImports:
   version: 69483b4bd14f5845b5a1e55bca19e954e827f1d0
   subpackages:
   - assert
+- name: github.com/stretchr/objx
+  version: 1a9d0bb9f541897e62256577b352fdbc1fb4fd94

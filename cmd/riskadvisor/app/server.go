@@ -13,12 +13,12 @@ import (
 	"github.com/Prytu/risk-advisor/pkg/model"
 
 	log "github.com/Sirupsen/logrus"
-	"k8s.io/client-go/1.5/pkg/api/v1"
 	"gopkg.in/gorilla/mux.v1"
+	"k8s.io/client-go/1.5/pkg/api/v1"
 )
 
 type AdviceService struct {
-	server 			*mux.Router
+	server                  *mux.Router
 	simulatorPort           string
 	clusterCommunicator     kubeClient.ClusterCommunicator
 	httpClient              http.Client
@@ -29,7 +29,7 @@ type AdviceService struct {
 func New(simulatorPort string, clusterCommunicator kubeClient.ClusterCommunicator, httpClient http.Client,
 	simulatorStartupTimeout int) *AdviceService {
 	as := AdviceService{
-		server:			 mux.NewRouter(),
+		server:                  mux.NewRouter(),
 		simulatorPort:           simulatorPort,
 		clusterCommunicator:     clusterCommunicator,
 		httpClient:              httpClient,
@@ -47,8 +47,7 @@ func (as *AdviceService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (as *AdviceService) register() {
-	advise := as.server.PathPrefix("/advise/").Subrouter()
-	advise.HandleFunc("/", as.sendAdviceRequest).Methods("POST")
+	as.server.HandleFunc("/advise", as.sendAdviceRequest).Methods("POST")
 }
 
 func (as *AdviceService) sendAdviceRequest(w http.ResponseWriter, r *http.Request) {
@@ -70,7 +69,7 @@ func (as *AdviceService) sendAdviceRequest(w http.ResponseWriter, r *http.Reques
 	}
 
 	log.Print("Received response from simulator")
-	riskAdvisorResponse, err := json.Marshal(simulatorResponse)
+	riskAdvisorResponse, err := json.MarshalIndent(simulatorResponse, "", " ")
 	if err != nil {
 		log.WithError(err).Error("Error writing simulator response")
 		writeError(w, fmt.Sprint("Unexpected server error."))
@@ -184,7 +183,7 @@ func (as *AdviceService) getSimulatorAdviseUrl(podIP string) string {
 }
 
 func writeError(w http.ResponseWriter, errorMsg string) {
-	writeStatusCodeAndContentType(&w, http.StatusInternalServerError)
+	writeStatusCodeAndContentType(w, http.StatusInternalServerError)
 	riskAdvisorResponse, err := json.Marshal(model.SchedulingError{
 		errorMsg,
 	})

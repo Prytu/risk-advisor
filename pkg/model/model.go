@@ -10,11 +10,8 @@ type SimulatorRequest struct {
 }
 
 type SchedulingResult struct {
-	PodName string `json:"podName"`
-	Result  string `json:"result"`
-	Message string `json:"message"`
-}
-
-type SchedulingError struct {
-	ErrorMessage string `json:"errorMessage"`
+	PodName      string `json:"podName,omitempty"`
+	Result       string `json:"result,omitempty"`
+	Message      string `json:"message,omitempty"`
+	ErrorMessage string `json:"errorMessage,omitempty"`
 }

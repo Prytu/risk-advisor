@@ -59,8 +59,6 @@ func parseAdviseRequestBody(requestBody io.ReadCloser) (*model.SimulatorRequest,
 		return nil, fmt.Errorf("error reading request body: %s", err)
 	}
 
-	log.WithField("request body", string(body)).Error("request body")
-
 	var adviceRequest model.SimulatorRequest
 
 	err = json.Unmarshal(body, &adviceRequest)
@@ -72,7 +70,7 @@ func parseAdviseRequestBody(requestBody io.ReadCloser) (*model.SimulatorRequest,
 }
 
 func respondWithError(w http.ResponseWriter, appError string, statusCode int) {
-	errStruct := model.SchedulingError{
+	errStruct := model.SchedulingResult{
 		ErrorMessage: appError,
 	}
 

@@ -15,7 +15,7 @@ func New(adviseHandler HTTPHandlerFunc) *RiskAdvisorHandler {
 	r := mux.NewRouter()
 
 	r.HandleFunc("/advise", adviseHandler).Methods("POST")
-	r.HandleFunc("/advise", aliveHandler).Methods("GET")
+	r.HandleFunc("/alive", aliveHandler).Methods("GET")
 
 	return &RiskAdvisorHandler{
 		server: r,
@@ -26,7 +26,7 @@ func (handler *RiskAdvisorHandler) ServeHTTP(w http.ResponseWriter, r *http.Requ
 	handler.server.ServeHTTP(w, r)
 }
 
-func aliveHandler(w http.ResponseWriter, r *http.Request) {
+func aliveHandler(w http.ResponseWriter, _ *http.Request) {
 	log.Info("Responding to risk-advisor alive check.")
 	w.Write([]byte(""))
 }

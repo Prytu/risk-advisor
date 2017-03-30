@@ -4,12 +4,15 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/Prytu/risk-advisor/cmd/simulator/app/state/fieldselectors"
-	"github.com/Prytu/risk-advisor/pkg/kubeClient"
 	"k8s.io/client-go/1.5/pkg/api"
 	"k8s.io/client-go/1.5/pkg/api/v1"
 	"k8s.io/client-go/1.5/pkg/fields"
+
+	"github.com/Prytu/risk-advisor/cmd/simulator/app/state/fieldselectors"
+	"github.com/Prytu/risk-advisor/pkg/kubeClient"
 )
+
+type InitStateFunc func(ksf kubeClient.ClusterStateFetcher) (*ClusterState, error)
 
 func InitState(ksf kubeClient.ClusterStateFetcher) (*ClusterState, error) {
 	assignedSelector, err := convertFieldSelector(fieldselectors.AssignedNonTerminatedPods)

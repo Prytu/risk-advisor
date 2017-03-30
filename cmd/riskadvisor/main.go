@@ -1,9 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"time"
-	"fmt"
 
 	flag "github.com/spf13/pflag"
 

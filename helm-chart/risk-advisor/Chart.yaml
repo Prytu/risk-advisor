@@ -1,0 +1,5 @@
+apiVersion: v1
+name: risk-advisor
+description: Risk Advisor module for Kubernetes
+version: 0.3.0
+#TODO: Add icon for our project

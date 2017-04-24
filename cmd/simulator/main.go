@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"net/http"
 
-	"k8s.io/client-go/1.5/pkg/api/v1"
+	log "github.com/Sirupsen/logrus"
 
-	"github.com/Prytu/risk-advisor/cmd/simulator/app/brain"
+	"github.com/Prytu/risk-advisor/cmd/simulator/app/initializer"
 	"github.com/Prytu/risk-advisor/cmd/simulator/app/riskadvisorHandler"
 	"github.com/Prytu/risk-advisor/cmd/simulator/app/state"
 	"github.com/Prytu/risk-advisor/pkg/flags"
+	"github.com/Prytu/risk-advisor/pkg/kubeClient"
 )
 
 func main() {
@@ -18,21 +19,19 @@ func main() {
 	schedulerCommunicationPort := flag.String("scheduler-port", defaults.SchedulerCommunicationPort, "Port for communication with scheduler")
 	flag.Parse()
 
-	// get state from apiserver
-	clusterState := state.InitState()
+	var raHandlerFunc riskadvisorhandler.HTTPHandlerFunc
 
-	// Channel for sending scheduling results between scheduler communication server and simulator
-	eventChannel := make(chan *v1.Event, 0)
+	ksf, err := kubeClient.New(*http.DefaultClient)
+	if err != nil {
+		errorMsg := "failed to communicate with cluster when building kubeClient"
+		log.WithError(err).Error(errorMsg)
 
-	// Scheduler communication server with some logic
-	b := brain.New(clusterState, eventChannel)
+		raHandlerFunc = riskadvisorhandler.ErrorResponseHandler(fmt.Errorf("%s (%s)", errorMsg, err))
+	} else {
+		raHandlerFunc = initializer.Initialize(*schedulerCommunicationPort, state.InitState, ksf)
+	}
 
-	// Handler for risk-advisor requests (advise, capacity)
-	adviseHandler := riskadvisorhandler.NewMultiplePodAdviseHandler(b, *schedulerCommunicationPort, eventChannel)
-	capacityHandler := riskadvisorhandler.NewCapacityHandler(b, *schedulerCommunicationPort, eventChannel)
-
-	// Server for communication between risk-advisor and simulator
-	raHandler := riskadvisorhandler.New(adviseHandler, capacityHandler)
+	raHandler := riskadvisorhandler.New(raHandlerFunc)
 
 	http.ListenAndServe(fmt.Sprintf(":%s", *raCommunicationPort), raHandler)
 }

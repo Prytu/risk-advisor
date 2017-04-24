@@ -58,7 +58,7 @@ func TestCommunicationWithSimulatorFailure(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	adviceService.ServeHTTP(recorder, request)
 
-	expectedBody := model.SchedulingError{
+	expectedBody := model.SchedulingResult{
 		ErrorMessage: fmt.Sprintf("Error communicating with simulator: %s", communicationWithSimulatorErrorMessage),
 	}
 	expectedBodyBytes, err := json.Marshal(expectedBody)
@@ -83,7 +83,7 @@ func TestCreatingPodFailure(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	adviceService.ServeHTTP(recorder, request)
 
-	expectedBody := model.SchedulingError{
+	expectedBody := model.SchedulingResult{
 		ErrorMessage: fmt.Sprintf("Error starting simulator pod: %s", creatingPodErrorMessage),
 	}
 	expectedBodyBytes, err := json.Marshal(expectedBody)
@@ -107,7 +107,7 @@ func TestWaitingUntilPodReadyFailure(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	adviceService.ServeHTTP(recorder, request)
 
-	expectedBody := model.SchedulingError{
+	expectedBody := model.SchedulingResult{
 		ErrorMessage: fmt.Sprintf("Error starting simulator pod: %s", waitingUntilPodReadyErrorMessage),
 	}
 	expectedBodyBytes, err := json.Marshal(expectedBody)
@@ -134,7 +134,7 @@ func TestUsersIncorrectRequest(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	adviceService.ServeHTTP(recorder, request)
 
-	expectedBody := model.SchedulingError{
+	expectedBody := model.SchedulingResult{
 		ErrorMessage: fmt.Sprintf("Error communicating with simulator: %s", unmarshallingRequestBodyErrorMessage),
 	}
 	expectedBodyBytes, err := json.Marshal(expectedBody)
@@ -165,7 +165,7 @@ func TestIncorrectSimulatorsResponse(t *testing.T) {
 }
 
 func createService(
-	clusterCommunicatorMock kubeClient.ClusterCommunicator,
+	clusterCommunicatorMock kubeClient.PodOperationHandler,
 ) *AdviceService {
 	return New(defaults.SimulatorPort, clusterCommunicatorMock, http.Client{}, defaults.StartupTimeout)
 }
@@ -174,7 +174,7 @@ type HttpClientResponseFunc func(*http.Request) (*http.Response, error)
 
 func createServiceWithMockHttpClient(
 	simulatorResponseMockFunc HttpClientResponseFunc,
-	clusterCommunicatorMock kubeClient.ClusterCommunicator,
+	clusterCommunicatorMock kubeClient.PodOperationHandler,
 ) *AdviceService {
 	httpClient := mocks.MockHTTPClient(simulatorResponseMockFunc)
 	return New(defaults.SimulatorPort, clusterCommunicatorMock, *httpClient, defaults.StartupTimeout)

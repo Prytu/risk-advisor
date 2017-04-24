@@ -20,13 +20,13 @@ import (
 type AdviceService struct {
 	server                  *mux.Router
 	simulatorPort           string
-	clusterCommunicator     kubeClient.ClusterCommunicator
+	clusterCommunicator     kubeClient.PodOperationHandler
 	httpClient              http.Client
 	simulatorStartupTimeout int
 	handlerLock             sync.Mutex
 }
 
-func New(simulatorPort string, clusterCommunicator kubeClient.ClusterCommunicator, httpClient http.Client,
+func New(simulatorPort string, clusterCommunicator kubeClient.PodOperationHandler, httpClient http.Client,
 	simulatorStartupTimeout int) *AdviceService {
 	as := AdviceService{
 		server:                  mux.NewRouter(),
@@ -89,7 +89,7 @@ func (as *AdviceService) startSimulatorPod() (string, error) {
 	}
 
 	log.Print("Waiting until simulator is ready")
-	err = as.clusterCommunicator.WaitUntilPodReady(as.getSimulatorAdviseUrl(podIP), as.simulatorStartupTimeout)
+	err = as.clusterCommunicator.WaitUntilPodReady(as.getSimulatorAliveUrl(podIP), as.simulatorStartupTimeout)
 	if err != nil {
 		log.WithError(err).Error("error waiting for simulator pod")
 		return "", err
@@ -182,10 +182,14 @@ func (as *AdviceService) getSimulatorAdviseUrl(podIP string) string {
 	return fmt.Sprintf("http://%s:%s/advise", podIP, as.simulatorPort)
 }
 
+func (as *AdviceService) getSimulatorAliveUrl(podIP string) string {
+	return fmt.Sprintf("http://%s:%s/alive", podIP, as.simulatorPort)
+}
+
 func writeError(w http.ResponseWriter, errorMsg string) {
 	writeStatusCodeAndContentType(w, http.StatusInternalServerError)
-	riskAdvisorResponse, err := json.Marshal(model.SchedulingError{
-		errorMsg,
+	riskAdvisorResponse, err := json.Marshal(model.SchedulingResult{
+		ErrorMessage: errorMsg,
 	})
 	if err != nil {
 		log.WithError(err).Fatal("error while marshalling error message")

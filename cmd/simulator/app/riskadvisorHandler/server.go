@@ -2,23 +2,31 @@ package riskadvisorhandler
 
 import (
 	"net/http"
+
+	log "github.com/Sirupsen/logrus"
+	"gopkg.in/gorilla/mux.v1"
 )
 
 type RiskAdvisorHandler struct {
-	server *http.ServeMux
+	server *mux.Router
 }
 
-func New(adviseHandler, capacityHandler HTTPHandlerFunc) *RiskAdvisorHandler {
-	mux := http.NewServeMux()
+func New(adviseHandler HTTPHandlerFunc) *RiskAdvisorHandler {
+	r := mux.NewRouter()
 
-	mux.HandleFunc("/advise", adviseHandler)
-	mux.HandleFunc("/capacity", capacityHandler)
+	r.HandleFunc("/advise", adviseHandler).Methods("POST")
+	r.HandleFunc("/alive", aliveHandler).Methods("GET")
 
 	return &RiskAdvisorHandler{
-		server: mux,
+		server: r,
 	}
 }
 
 func (handler *RiskAdvisorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	handler.server.ServeHTTP(w, r)
+}
+
+func aliveHandler(w http.ResponseWriter, _ *http.Request) {
+	log.Info("Responding to risk-advisor alive check.")
+	w.Write([]byte(""))
 }

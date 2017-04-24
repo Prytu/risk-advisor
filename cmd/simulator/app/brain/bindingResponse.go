@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/Sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -24,7 +25,9 @@ func init() {
 		Code:     201,
 	})
 	if err != nil {
-		panic(fmt.Sprintf("Initialization error while marshalling binding response: %v", err))
+		logrus.WithError(err).Error(fmt.Sprintf("error while marshalling binding response: %v", err))
+		bindingResponse = nil
+		return
 	}
 
 	bindingResponse = bindingResponseJSON

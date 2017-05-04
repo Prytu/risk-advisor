@@ -48,6 +48,12 @@ func (as *AdviceService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (as *AdviceService) register() {
 	as.server.HandleFunc("/advise", as.sendAdviceRequest).Methods("POST")
+	as.server.HandleFunc("/healthz", as.healthStatus).Methods("GET")
+}
+
+func (as *AdviceService) healthStatus(w http.ResponseWriter, r *http.Request) {
+	writeStatusCodeAndContentType(w, http.StatusOK)
+	w.Write([]byte("ok"))
 }
 
 func (as *AdviceService) sendAdviceRequest(w http.ResponseWriter, r *http.Request) {

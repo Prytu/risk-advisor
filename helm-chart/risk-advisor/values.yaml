@@ -4,7 +4,7 @@
 replicaCount: 1
 image:
   repository: pposkrobko/risk-advisor
-  tag: latest #TODO: change to stable
+  tag: latest #TODO: change to "stable" for final release
   pullPolicy: IfNotPresent
 service:
   name: risk-advisor-service
@@ -12,7 +12,6 @@ service:
   externalPort: 11111
   internalPort: 9997
 resources:
-  #TODO: are these resources enough?
   limits:
     cpu: 100m
     memory: 128Mi

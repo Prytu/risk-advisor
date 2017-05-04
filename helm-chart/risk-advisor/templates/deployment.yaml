@@ -17,14 +17,17 @@ spec:
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         ports:
         - containerPort: {{ .Values.service.internalPort }}
-#Our Risk Advisor doesn't have these endpoints yet
-#        livenessProbe:
-#          httpGet:
-#            path: /
-#            port: {{ .Values.service.internalPort }}
-#        readinessProbe:
-#          httpGet:
-#            path: /
-#            port: {{ .Values.service.internalPort }}
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: {{ .Values.service.internalPort }}
+            initialDelaySeconds: 3
+            periodSeconds: 3
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: {{ .Values.service.internalPort }}
+            initialDelaySeconds: 3
+            periodSeconds: 3
         resources:
 {{ toYaml .Values.resources | indent 12 }}

@@ -1,5 +1,5 @@
 # risk-advisor
-PoC of risk advisor module for Kubernetes
+PoC of risk advisor module for Kubernetes. This project is licensed under the terms of the Apache 2.0 license.
 
 ## Risk advisor server
 Usage:

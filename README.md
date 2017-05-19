@@ -15,6 +15,7 @@ Endpoints:
      * `id`: (int) ID of request
      * `status`: (string) Status of request
      * `result`: (api.Binding) Information passed from proxy server
+ * `/healthz`  Health check endpoint, responds with HTTP 200 if successful
 
 ## Building
 * `make clean` deletes executables and removes all `risk-advisor` and `simulator` docker images

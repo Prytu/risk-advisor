@@ -17,3 +17,15 @@ spec:
         image: pposkrobko/risk-advisor
         ports:
         - containerPort: 9997
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 9997
+          initialDelaySeconds: 3
+          periodSeconds: 3
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 9997
+          initialDelaySeconds: 3
+          periodSeconds: 3

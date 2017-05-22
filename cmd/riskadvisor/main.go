@@ -14,7 +14,7 @@ import (
 )
 
 func main() {
-	simulatorPort := flag.String("simulator", defaults.SimulatorPort, "Address on which simulator pod listens for requests")
+	simulatorPort := flag.String("simulator", defaults.SimulatorPort, "Port on which simulator pod listens for requests")
 	port := flag.String("port", defaults.RiskAdvisorUserPort, "Port on which risk-advisors listens for users requests")
 	simulatorStartupTimeout := flag.Int("startupTimeout", defaults.StartupTimeout, "Maximum duration in seconds to wait for simulator pod to start running.")
 	simulatorRequestTimeout := flag.Int("requestTimeout", defaults.RequestTimeout, "Maximum duration in seconds to wait for simulator to respond to schedluing request.")

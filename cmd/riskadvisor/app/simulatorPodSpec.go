@@ -11,8 +11,8 @@ var simulatorPod = &v1.Pod{
 	Spec: v1.PodSpec{
 		Containers: []v1.Container{{
 			Name:            "simulator",
-			Image:           "pposkrobko/simulator",
-			ImagePullPolicy: v1.PullNever, // only for development with Minikube
+			Image:           "pposkrobko/simulator:v1.0.0",
+			ImagePullPolicy: v1.PullIfNotPresent,
 			Ports: []v1.ContainerPort{
 				{ContainerPort: 9998},
 				{ContainerPort: 9999},

@@ -1,7 +1,7 @@
 # risk-advisor
 Risk advisor module for Kubernetes. This project is licensed under the terms of the Apache 2.0 license.
 
-It allows you to check how the cluster state would change it the request of creating provided pods was accepted by Kubernetes.
+It allows you to check how the cluster state would change if the request of creating provided pods was accepted by Kubernetes.
 
 ## Risk advisor server
 Usage:
@@ -15,7 +15,7 @@ Endpoints:
      * Accepts: a JSON table containing pod definitions
      * Returns: a JSON table of scheduling results. Each result contains:
        	 * `podName`: (string) Name of the relevant pod
-         * `result`: (string) `Scheduled` if the pod would be successfully scheduled, `failedScheduling` otherwise
+         * `result`: (string) `Scheduled` if the pod would be successfully scheduled, `FailedScheduling` otherwise
          * `message`: (string) Additional information about the result (e.g. nodes which were tried, or the reason why scheduling failed)
  * `/healthz`  Health check endpoint, responds with HTTP 200 if successful
 

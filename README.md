@@ -6,15 +6,17 @@ Usage:
 
 * `--port` int                      Port to listen on (default 11111)
 * `--proxy-url` string              URL of proxy server (default "http://localhost:9998/")
-* `--simulatorStartupTimeout` int   Maximum ammount of time in seconds to wait for simulator pod to start running (default 30)
-* `--simulatorRequestTimeout` int   Maximum ammount of time in seconds to wait for simulator to respond to request (default 10)
+* `--simulatorStartupTimeout` int   Maximum amount of time in seconds to wait for simulator pod to start running (default 30)
+* `--simulatorRequestTimeout` int   Maximum amount of time in seconds to wait for simulator to respond to request (default 10)
 
 Endpoints:
 
- * `/advice`	Accepts api.Pod as JSON, returns JSON containing:
-     * `id`: (int) ID of request
-     * `status`: (string) Status of request
-     * `result`: (api.Binding) Information passed from proxy server
+ * `/advise`:
+	* Accepts: a JSON table containing pod definitions
+	* Returns: a JSON table of scheduling results. Each result contains:
+		* `PodName`: Name of the relevant pod
+		* `Result`: `Scheduled` if the pod would be successfully scheduled, `failedScheduling` otherwise
+		* `Message`: Additional information about the result (e.g. nodes which were tried, or the reason why scheduling failed)
  * `/healthz`  Health check endpoint, responds with HTTP 200 if successful
 
 ## Building
@@ -28,6 +30,5 @@ Endpoints:
 If you are developing on macOS you need to `install` on a linux machine. Then you can run `make docker && make docker-tag`
 to create and tag docker images.
 
-<b>NOTE</b> that `make docker-tag`, `make docker-push` and `make docker-full` commands require you to have `DOCKER_HUB_USER`
-env variable set to your docker hub username. You can also run those commands providing the username like this:
+__NOTE:__ `make docker-tag`, `make docker-push` and `make docker-full` commands require you to have `DOCKER_HUB_USER` environment variable set to your docker hub username. You can also run those commands providing the username like this:
 `<command> DOCKER_HUB_USERNAME=<username>`.
